@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -385,4 +385,3 @@ if st.button("🚀 Analisis"):
             st.write(
                 emotion_probs
             )
-```
