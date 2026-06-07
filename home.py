@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-import torch.nn.functional as F
+import numpy as np
+import re
 import torch
-import plotly.express as px
 
 from transformers import (
     AutoTokenizer,
@@ -14,77 +14,100 @@ from transformers import (
 # =====================================================
 
 st.set_page_config(
-    page_title="Emotion AI",
-    page_icon="🧠",
+    page_title="Livin Review Analysis",
+    page_icon="📊",
     layout="wide"
 )
 
 # =====================================================
-# STYLE
-# =====================================================
-
-st.markdown("""
-<style>
-
-[data-testid="stAppViewContainer"]{
-    background-color:#020B1C;
-}
-
-[data-testid="stSidebar"]{
-    background-color:#09152D;
-}
-
-h1,h2,h3,h4,h5,h6,p,label{
-    color:white;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# =====================================================
-# DEVICE
-# =====================================================
-
-DEVICE = torch.device(
-    "cuda" if torch.cuda.is_available() else "cpu"
-)
-
-# =====================================================
-# MODEL LOADER
+# LOAD MODEL
 # =====================================================
 
 @st.cache_resource
-def load_sentiment_model():
+def load_models():
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        "envidevelopment/livin_sentiment"
+    sentiment_model_name = "envidevelopment/livin-sentiment"
+    emotion_model_name = "envidevelopment/livin_emotion"
+
+    sentiment_tokenizer = AutoTokenizer.from_pretrained(
+        sentiment_model_name
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        "envidevelopment/livin_emotion"
+    sentiment_model = (
+        AutoModelForSequenceClassification
+        .from_pretrained(sentiment_model_name)
     )
 
-    model.to(DEVICE)
-    model.eval()
-
-    return tokenizer, model
-
-
-@st.cache_resource
-def load_emotion_model():
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        "envidevelopment/emotion_model"
+    emotion_tokenizer = AutoTokenizer.from_pretrained(
+        emotion_model_name
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        "envidevelopment/emotion_model"
+    emotion_model = (
+        AutoModelForSequenceClassification
+        .from_pretrained(emotion_model_name)
     )
 
-    model.to(DEVICE)
-    model.eval()
+    return (
+        sentiment_tokenizer,
+        sentiment_model,
+        emotion_tokenizer,
+        emotion_model
+    )
 
-    return tokenizer, model
+(
+    sentiment_tokenizer,
+    sentiment_model,
+    emotion_tokenizer,
+    emotion_model
+) = load_models()
+
+# =====================================================
+# LABEL
+# =====================================================
+
+sentiment_labels = {
+    0: "Negative",
+    1: "Neutral",
+    2: "Positive"
+}
+
+emotion_labels = {
+    0: "Anger",
+    1: "Fear",
+    2: "Happy",
+    3: "Love",
+    4: "Sadness"
+}
+
+# =====================================================
+# PREPROCESSING
+# =====================================================
+
+def clean_text(text):
+
+    text = str(text)
+
+    text = re.sub(r"http\S+", "", text)
+
+    text = re.sub(r"www\S+", "", text)
+
+    text = re.sub(r"@[A-Za-z0-9_]+", "", text)
+
+    text = re.sub(r"#", "", text)
+
+    text = re.sub(
+        r"[^a-zA-Z0-9\s]",
+        " ",
+        text
+    )
+
+    text = re.sub(
+        r"\s+",
+        " ",
+        text
+    )
+
+    return text.strip()
 
 # =====================================================
 # PREDICTION
@@ -92,429 +115,228 @@ def load_emotion_model():
 
 def predict_sentiment(text):
 
-    tokenizer, model = load_sentiment_model()
-
-    inputs = tokenizer(
-        str(text),
+    inputs = sentiment_tokenizer(
+        text,
         return_tensors="pt",
         truncation=True,
-        max_length=512,
-        padding=True
+        padding=True,
+        max_length=256
     )
-
-    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
 
     with torch.no_grad():
-        outputs = model(**inputs)
 
-    probs = F.softmax(outputs.logits, dim=1)
+        outputs = sentiment_model(**inputs)
 
-    confidence = torch.max(probs).item() * 100
+        probs = torch.softmax(
+            outputs.logits,
+            dim=1
+        ).numpy()[0]
 
-    pred = torch.argmax(probs, dim=1).item()
-
-    label_map = {
-        0: "Negatif",
-        1: "Netral",
-        2: "Positif"
-    }
+    pred = np.argmax(probs)
 
     return (
-        label_map.get(pred, "Unknown"),
-        round(confidence, 2)
+        sentiment_labels[pred],
+        probs
     )
+
+
 def predict_emotion(text):
 
-    tokenizer, model = load_emotion_model()
-
-    inputs = tokenizer(
-        str(text),
+    inputs = emotion_tokenizer(
+        text,
         return_tensors="pt",
         truncation=True,
-        max_length=512,
-        padding=True
+        padding=True,
+        max_length=256
     )
-
-    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
 
     with torch.no_grad():
-        outputs = model(**inputs)
 
-    probs = F.softmax(outputs.logits, dim=1)
+        outputs = emotion_model(**inputs)
 
-    confidence = torch.max(probs).item() * 100
+        probs = torch.softmax(
+            outputs.logits,
+            dim=1
+        ).numpy()[0]
 
-    pred = torch.argmax(probs, dim=1).item()
-
-    emotion_map = {
-        0: "😡 Anger",
-        1: "😨 Fear",
-        2: "😊 Happy",
-        3: "❤️ Love",
-        4: "😢 Sadness"
-    }
+    pred = np.argmax(probs)
 
     return (
-        emotion_map.get(pred, "❓ Unknown"),
-        round(confidence, 2)
+        emotion_labels[pred],
+        probs
     )
-# =====================================================
-# SESSION
-# =====================================================
 
-if "single_result" not in st.session_state:
-    st.session_state.single_result = None
-
-if "input_text" not in st.session_state:
-    st.session_state.input_text = ""
-
-if "result_df" not in st.session_state:
-    st.session_state.result_df = None
 # =====================================================
-# SIDEBAR
+# TITLE
 # =====================================================
 
-st.sidebar.title("🧠 Emotion AI")
-
-menu = st.sidebar.radio(
-    "Menu",
-    [
-        "Dashboard",
-        "Analisis Satuan",
-        "Bulk CSV"
-    ]
+st.title("📱 Livin Review Analysis")
+st.markdown(
+    """
+Analisis Sentimen dan Emosi Ulasan Pengguna
+menggunakan IndoBERT
+"""
 )
 
 # =====================================================
-# DASHBOARD
+# INPUT
 # =====================================================
 
-if menu == "Dashboard":
+review = st.text_area(
+    "Masukkan Ulasan",
+    height=150,
+    placeholder="Contoh: Aplikasi sangat membantu transaksi saya"
+)
 
-    st.title("📊 Dashboard Analisis")
+# =====================================================
+# BUTTON
+# =====================================================
 
-    top_col1, top_col2 = st.columns([8, 2])
+if st.button("Analisis"):
 
-    with top_col2:
+    if review.strip() == "":
 
-        if st.button(
-            "🔄 Refresh",
-            use_container_width=True
-        ):
-
-            st.session_state.result_df = None
-
-            st.rerun()
-
-    if st.session_state.result_df is None:
-
-        st.info(
-            "Silakan proses data pada menu Bulk CSV terlebih dahulu."
+        st.warning(
+            "Masukkan ulasan terlebih dahulu"
         )
 
     else:
 
-        df = st.session_state.result_df
+        # ==================================
+        # STEP 1
+        # ==================================
 
-        total = len(df)
+        st.subheader("1️⃣ Teks Asli")
 
-        positif = len(
-            df[df["Sentiment"] == "Positif"]
+        st.info(review)
+
+        # ==================================
+        # STEP 2
+        # ==================================
+
+        cleaned = clean_text(review)
+
+        st.subheader("2️⃣ Preprocessing")
+
+        st.code(cleaned)
+
+        # ==================================
+        # STEP 3
+        # ==================================
+
+        tokens = sentiment_tokenizer.tokenize(
+            cleaned
         )
 
-        negatif = len(
-            df[df["Sentiment"] == "Negatif"]
+        st.subheader("3️⃣ Tokenisasi")
+
+        st.write(tokens)
+
+        # ==================================
+        # STEP 4
+        # ==================================
+
+        sentiment_result, sentiment_probs = (
+            predict_sentiment(cleaned)
         )
 
-        netral = len(
-            df[df["Sentiment"] == "Netral"]
+        emotion_result, emotion_probs = (
+            predict_emotion(cleaned)
         )
 
-        c1, c2, c3, c4 = st.columns(4)
+        # ==================================
+        # STEP 5
+        # ==================================
 
-        c1.metric(
-            "Total Data",
-            total
-        )
+        st.subheader("4️⃣ Hasil Sentiment")
 
-        c2.metric(
-            "Positif",
-            positif
-        )
+        col1, col2 = st.columns(2)
 
-        c3.metric(
-            "Negatif",
-            negatif
-        )
+        with col1:
 
-        c4.metric(
-            "Netral",
-            netral
-        )
-
-        st.markdown("---")
-
-        chart1, chart2 = st.columns(2)
-
-        with chart1:
-
-            sentiment_count = (
-                df["Sentiment"]
-                .value_counts()
-                .reset_index()
-            )
-
-            sentiment_count.columns = [
+            st.metric(
                 "Sentiment",
-                "Jumlah"
-            ]
-
-            fig_sentiment = px.pie(
-                sentiment_count,
-                names="Sentiment",
-                values="Jumlah",
-                title="Distribusi Sentimen"
+                sentiment_result
             )
 
-            st.plotly_chart(
-                fig_sentiment,
-                use_container_width=True
+        with col2:
+
+            st.metric(
+                "Confidence",
+                f"{max(sentiment_probs)*100:.2f}%"
             )
 
-        with chart2:
+        sentiment_df = pd.DataFrame({
+            "Sentiment":
+            [
+                "Negative",
+                "Neutral",
+                "Positive"
+            ],
+            "Probability":
+            sentiment_probs
+        })
 
-            emotion_count = (
-                df["Emotion"]
-                .value_counts()
-                .reset_index()
+        st.bar_chart(
+            sentiment_df.set_index(
+                "Sentiment"
             )
-
-            emotion_count.columns = [
-                "Emotion",
-                "Jumlah"
-            ]
-
-            fig_emotion = px.bar(
-                emotion_count,
-                x="Emotion",
-                y="Jumlah",
-                title="Distribusi Emosi"
-            )
-
-            st.plotly_chart(
-                fig_emotion,
-                use_container_width=True
-            )
-
-        st.markdown("---")
-
-        st.subheader(
-            "📋 Hasil Analisis"
         )
+
+        # ==================================
+        # STEP 6
+        # ==================================
+
+        st.subheader("5️⃣ Hasil Emotion")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.metric(
+                "Emotion",
+                emotion_result
+            )
+
+        with col2:
+
+            st.metric(
+                "Confidence",
+                f"{max(emotion_probs)*100:.2f}%"
+            )
+
+        emotion_df = pd.DataFrame({
+            "Emotion":
+            [
+                "Anger",
+                "Fear",
+                "Happy",
+                "Love",
+                "Sadness"
+            ],
+            "Probability":
+            emotion_probs
+        })
+
+        st.bar_chart(
+            emotion_df.set_index(
+                "Emotion"
+            )
+        )
+
+        # ==================================
+        # STEP 7
+        # ==================================
+
+        st.subheader("6️⃣ Ringkasan")
+
+        summary = pd.DataFrame({
+            "Review":[review],
+            "Sentiment":[sentiment_result],
+            "Emotion":[emotion_result]
+        })
 
         st.dataframe(
-            df,
+            summary,
             use_container_width=True
         )
-
-# =====================================================
-# ANALISIS SATUAN
-# =====================================================
-elif menu == "Analisis Satuan":
-
-    top1, top2 = st.columns([8, 2])
-
-    with top1:
-        st.title("🔍 Analisis Sentimen & Emosi")
-
-    with top2:
-
-        if st.button(
-            "🔄 Refresh",
-            use_container_width=True
-        ):
-
-            st.session_state.single_result = None
-            st.session_state.input_text = ""
-
-            st.rerun()
-
-    text = st.text_area(
-        "Masukkan Ulasan",
-        height=180,
-        key="input_text"
-    )
-
-    if st.button("🚀 Analisis"):
-
-        if not text.strip():
-
-            st.warning(
-                "Masukkan teks terlebih dahulu"
-            )
-
-        else:
-
-            try:
-
-                with st.spinner(
-                    "🧠 Sedang menganalisis..."
-                ):
-
-                    sentiment, sentiment_score = predict_sentiment(
-                        text
-                    )
-
-                    emotion, emotion_score = predict_emotion(
-                        text
-                    )
-
-                st.session_state.single_result = {
-                    "sentiment": sentiment,
-                    "sentiment_score": sentiment_score,
-                    "emotion": emotion,
-                    "emotion_score": emotion_score
-                }
-
-            except Exception as e:
-
-                st.error(
-                    f"Error : {e}"
-                )
-
-    if st.session_state.single_result is not None:
-
-        result = st.session_state.single_result
-
-        st.markdown("## 📋 Hasil Analisis")
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-            st.metric(
-                "Sentimen",
-                result["sentiment"]
-            )
-
-        with c2:
-            st.metric(
-                "Confidence",
-                f'{result["sentiment_score"]:.2f}%'
-            )
-
-        with c3:
-            st.metric(
-                "Emosi",
-                result["emotion"]
-            )
-
-        with c4:
-            st.metric(
-                "Confidence",
-                f'{result["emotion_score"]:.2f}%'
-            )
-
-# =====================================================
-# BULK CSV
-# =====================================================
-
-elif menu == "Bulk CSV":
-
-    st.title("📂 Bulk CSV")
-
-    uploaded_file = st.file_uploader(
-        "Upload CSV",
-        type=["csv"]
-    )
-
-    if uploaded_file is not None:
-
-        try:
-
-            df = pd.read_csv(
-                uploaded_file,
-                encoding="latin1",
-                sep=None,
-                engine="python",
-                on_bad_lines="skip"
-            )
-
-            st.dataframe(
-                df.head()
-            )
-
-            text_col = st.selectbox(
-                "Pilih Kolom Teks",
-                df.columns
-            )
-
-            if st.button("Proses Data"):
-
-                sentiments = []
-                emotions = []
-
-                progress = st.progress(0)
-
-                for i, text in enumerate(df[text_col]):
-
-                    sentiment_label, _ = predict_sentiment(
-                        str(text)
-                    )
-
-                    emotion_label, _ = predict_emotion(
-                        str(text)
-                    )
-
-                    # Hilangkan emoji pada hasil CSV
-                    emotion_label = (
-                        emotion_label
-                        .replace("😡 ", "")
-                        .replace("😨 ", "")
-                        .replace("😊 ", "")
-                        .replace("❤️ ", "")
-                        .replace("😢 ", "")
-                        .replace("❓ ", "")
-                    )
-
-                    sentiments.append(
-                        sentiment_label
-                    )
-
-                    emotions.append(
-                        emotion_label
-                    )
-
-                    progress.progress(
-                        (i + 1) / len(df)
-                    )
-
-                df["Sentiment"] = sentiments
-                df["Emotion"] = emotions
-
-                st.session_state.result_df = df
-
-                st.success(
-                    "✅ Analisis selesai"
-                )
-
-                st.dataframe(
-                    df,
-                    use_container_width=True
-                )
-
-                csv = df.to_csv(
-                    index=False
-                ).encode("utf-8")
-
-                st.download_button(
-                    "⬇ Download Hasil",
-                    csv,
-                    file_name="hasil_analisis.csv",
-                    mime="text/csv"
-                )
-
-        except Exception as e:
-
-            st.error(
-                f"Error: {e}"
-            )
