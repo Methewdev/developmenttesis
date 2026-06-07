@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,7 +16,7 @@ from transformers import (
 
 st.set_page_config(
     page_title="Livin Review Analysis",
-    page_icon="📊",
+    page_icon="📱",
     layout="wide"
 )
 
@@ -26,23 +27,23 @@ st.set_page_config(
 @st.cache_resource
 def load_models():
 
-    sentiment_model_name = "envidevelopment/livin-sentiment"
-    emotion_model_name = "envidevelopment/livin_emotion"
+    sentiment_repo = "envidevelopment/livin-sentiment"
+    emotion_repo = "envidevelopment/livin_emotion"
 
     sentiment_tokenizer = AutoTokenizer.from_pretrained(
-        sentiment_model_name
+        sentiment_repo
     )
 
     sentiment_model = AutoModelForSequenceClassification.from_pretrained(
-        sentiment_model_name
+        sentiment_repo
     )
 
     emotion_tokenizer = AutoTokenizer.from_pretrained(
-        emotion_model_name
+        emotion_repo
     )
 
     emotion_model = AutoModelForSequenceClassification.from_pretrained(
-        emotion_model_name
+        emotion_repo
     )
 
     sentiment_model.eval()
@@ -114,10 +115,10 @@ def predict_sentiment(text):
 
     pred = int(np.argmax(probs))
 
-    try:
-        label = sentiment_model.config.id2label[pred]
-    except:
-        label = sentiment_model.config.id2label[str(pred)]
+    label = sentiment_model.config.id2label.get(
+        pred,
+        sentiment_model.config.id2label.get(str(pred))
+    )
 
     return label, probs
 
@@ -146,35 +147,43 @@ def predict_emotion(text):
 
     pred = int(np.argmax(probs))
 
-    try:
-        label = emotion_model.config.id2label[pred]
-    except:
-        label = emotion_model.config.id2label[str(pred)]
+    label = emotion_model.config.id2label.get(
+        pred,
+        emotion_model.config.id2label.get(str(pred))
+    )
 
     return label, probs
 
 # =====================================================
-# TITLE
+# HEADER
 # =====================================================
 
 st.title("📱 Livin Review Analysis")
 
-st.markdown("""
+st.markdown(
+"""
 Analisis Sentimen dan Emosi Ulasan Pengguna
-menggunakan IndoBERT + Hugging Face
-""")
+menggunakan IndoBERT Transformer
+"""
+)
 
 # =====================================================
-# DEBUG MODEL
+# MODEL INFO
 # =====================================================
 
 with st.expander("🔍 Informasi Model"):
 
-    st.write("Sentiment Labels:")
-    st.json(sentiment_model.config.id2label)
+    st.write("Sentiment Labels")
 
-    st.write("Emotion Labels:")
-    st.json(emotion_model.config.id2label)
+    st.json(
+        sentiment_model.config.id2label
+    )
+
+    st.write("Emotion Labels")
+
+    st.json(
+        emotion_model.config.id2label
+    )
 
 # =====================================================
 # INPUT
@@ -182,8 +191,8 @@ with st.expander("🔍 Informasi Model"):
 
 review = st.text_area(
     "Masukkan Ulasan",
-    height=150,
-    placeholder="Contoh: Aplikasi sangat membantu transaksi saya"
+    height=180,
+    placeholder="Contoh: Aplikasi sangat membantu transaksi saya."
 )
 
 # =====================================================
@@ -200,27 +209,21 @@ if st.button("🚀 Analisis"):
 
     else:
 
-        # ==================================
         # STEP 1
-        # ==================================
 
         st.subheader("1️⃣ Teks Asli")
 
         st.info(review)
 
-        # ==================================
         # STEP 2
-        # ==================================
 
         cleaned = clean_text(review)
 
-        st.subheader("2️⃣ Hasil Preprocessing")
+        st.subheader("2️⃣ Preprocessing")
 
         st.code(cleaned)
 
-        # ==================================
         # STEP 3
-        # ==================================
 
         tokens = sentiment_tokenizer.tokenize(
             cleaned
@@ -230,21 +233,19 @@ if st.button("🚀 Analisis"):
 
         st.write(tokens)
 
-        # ==================================
         # STEP 4
-        # ==================================
 
-        sentiment_result, sentiment_probs = predict_sentiment(
-            cleaned
+        sentiment_result, sentiment_probs = (
+            predict_sentiment(cleaned)
         )
 
-        emotion_result, emotion_probs = predict_emotion(
-            cleaned
+        emotion_result, emotion_probs = (
+            predict_emotion(cleaned)
         )
 
-        # ==================================
+        # =====================================================
         # SENTIMENT
-        # ==================================
+        # =====================================================
 
         st.subheader("4️⃣ Hasil Sentimen")
 
@@ -264,22 +265,20 @@ if st.button("🚀 Analisis"):
                 f"{np.max(sentiment_probs)*100:.2f}%"
             )
 
-        sentiment_labels = []
-
-        try:
-            for i in range(len(sentiment_probs)):
-                sentiment_labels.append(
-                    sentiment_model.config.id2label[i]
-                )
-        except:
-            for i in range(len(sentiment_probs)):
-                sentiment_labels.append(
-                    sentiment_model.config.id2label[str(i)]
-                )
+        sentiment_labels = [
+            sentiment_model.config.id2label.get(
+                i,
+                sentiment_model.config.id2label.get(str(i))
+            )
+            for i in range(len(sentiment_probs))
+        ]
 
         sentiment_df = pd.DataFrame({
+
             "Label": sentiment_labels,
+
             "Probability": sentiment_probs
+
         })
 
         st.bar_chart(
@@ -293,9 +292,9 @@ if st.button("🚀 Analisis"):
             use_container_width=True
         )
 
-        # ==================================
+        # =====================================================
         # EMOTION
-        # ==================================
+        # =====================================================
 
         st.subheader("5️⃣ Hasil Emosi")
 
@@ -315,22 +314,20 @@ if st.button("🚀 Analisis"):
                 f"{np.max(emotion_probs)*100:.2f}%"
             )
 
-        emotion_labels = []
-
-        try:
-            for i in range(len(emotion_probs)):
-                emotion_labels.append(
-                    emotion_model.config.id2label[i]
-                )
-        except:
-            for i in range(len(emotion_probs)):
-                emotion_labels.append(
-                    emotion_model.config.id2label[str(i)]
-                )
+        emotion_labels = [
+            emotion_model.config.id2label.get(
+                i,
+                emotion_model.config.id2label.get(str(i))
+            )
+            for i in range(len(emotion_probs))
+        ]
 
         emotion_df = pd.DataFrame({
+
             "Label": emotion_labels,
+
             "Probability": emotion_probs
+
         })
 
         st.bar_chart(
@@ -344,16 +341,20 @@ if st.button("🚀 Analisis"):
             use_container_width=True
         )
 
-        # ==================================
+        # =====================================================
         # SUMMARY
-        # ==================================
+        # =====================================================
 
         st.subheader("6️⃣ Ringkasan")
 
         summary = pd.DataFrame({
+
             "Review": [review],
+
             "Sentiment": [sentiment_result],
+
             "Emotion": [emotion_result]
+
         })
 
         st.dataframe(
@@ -361,14 +362,27 @@ if st.button("🚀 Analisis"):
             use_container_width=True
         )
 
-        # ==================================
+        # =====================================================
         # RAW PROBABILITY
-        # ==================================
+        # =====================================================
 
-        with st.expander("📊 Detail Probabilitas"):
+        with st.expander(
+            "📊 Detail Probabilitas"
+        ):
 
-            st.write("Sentiment Probability")
-            st.write(sentiment_probs)
+            st.write(
+                "Sentiment Probability"
+            )
 
-            st.write("Emotion Probability")
-            st.write(emotion_probs)
+            st.write(
+                sentiment_probs
+            )
+
+            st.write(
+                "Emotion Probability"
+            )
+
+            st.write(
+                emotion_probs
+            )
+```
