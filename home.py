@@ -33,19 +33,20 @@ def load_models():
         sentiment_model_name
     )
 
-    sentiment_model = (
-        AutoModelForSequenceClassification
-        .from_pretrained(sentiment_model_name)
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained(
+        sentiment_model_name
     )
 
     emotion_tokenizer = AutoTokenizer.from_pretrained(
         emotion_model_name
     )
 
-    emotion_model = (
-        AutoModelForSequenceClassification
-        .from_pretrained(emotion_model_name)
+    emotion_model = AutoModelForSequenceClassification.from_pretrained(
+        emotion_model_name
     )
+
+    sentiment_model.eval()
+    emotion_model.eval()
 
     return (
         sentiment_tokenizer,
@@ -62,24 +63,6 @@ def load_models():
 ) = load_models()
 
 # =====================================================
-# LABEL
-# =====================================================
-
-sentiment_labels = {
-    0: "Negative",
-    1: "Neutral",
-    2: "Positive"
-}
-
-emotion_labels = {
-    0: "Anger",
-    1: "Fear",
-    2: "Happy",
-    3: "Love",
-    4: "Sadness"
-}
-
-# =====================================================
 # PREPROCESSING
 # =====================================================
 
@@ -88,11 +71,8 @@ def clean_text(text):
     text = str(text)
 
     text = re.sub(r"http\S+", "", text)
-
     text = re.sub(r"www\S+", "", text)
-
     text = re.sub(r"@[A-Za-z0-9_]+", "", text)
-
     text = re.sub(r"#", "", text)
 
     text = re.sub(
@@ -110,7 +90,7 @@ def clean_text(text):
     return text.strip()
 
 # =====================================================
-# PREDICTION
+# SENTIMENT
 # =====================================================
 
 def predict_sentiment(text):
@@ -130,15 +110,20 @@ def predict_sentiment(text):
         probs = torch.softmax(
             outputs.logits,
             dim=1
-        ).numpy()[0]
+        ).cpu().numpy()[0]
 
-    pred = np.argmax(probs)
+    pred = int(np.argmax(probs))
 
-    return (
-        sentiment_labels[pred],
-        probs
-    )
+    try:
+        label = sentiment_model.config.id2label[pred]
+    except:
+        label = sentiment_model.config.id2label[str(pred)]
 
+    return label, probs
+
+# =====================================================
+# EMOTION
+# =====================================================
 
 def predict_emotion(text):
 
@@ -157,26 +142,39 @@ def predict_emotion(text):
         probs = torch.softmax(
             outputs.logits,
             dim=1
-        ).numpy()[0]
+        ).cpu().numpy()[0]
 
-    pred = np.argmax(probs)
+    pred = int(np.argmax(probs))
 
-    return (
-        emotion_labels[pred],
-        probs
-    )
+    try:
+        label = emotion_model.config.id2label[pred]
+    except:
+        label = emotion_model.config.id2label[str(pred)]
+
+    return label, probs
 
 # =====================================================
 # TITLE
 # =====================================================
 
 st.title("📱 Livin Review Analysis")
-st.markdown(
-    """
+
+st.markdown("""
 Analisis Sentimen dan Emosi Ulasan Pengguna
-menggunakan IndoBERT
-"""
-)
+menggunakan IndoBERT + Hugging Face
+""")
+
+# =====================================================
+# DEBUG MODEL
+# =====================================================
+
+with st.expander("🔍 Informasi Model"):
+
+    st.write("Sentiment Labels:")
+    st.json(sentiment_model.config.id2label)
+
+    st.write("Emotion Labels:")
+    st.json(emotion_model.config.id2label)
 
 # =====================================================
 # INPUT
@@ -189,15 +187,15 @@ review = st.text_area(
 )
 
 # =====================================================
-# BUTTON
+# ANALISIS
 # =====================================================
 
-if st.button("Analisis"):
+if st.button("🚀 Analisis"):
 
-    if review.strip() == "":
+    if not review.strip():
 
         st.warning(
-            "Masukkan ulasan terlebih dahulu"
+            "Masukkan ulasan terlebih dahulu."
         )
 
     else:
@@ -216,7 +214,7 @@ if st.button("Analisis"):
 
         cleaned = clean_text(review)
 
-        st.subheader("2️⃣ Preprocessing")
+        st.subheader("2️⃣ Hasil Preprocessing")
 
         st.code(cleaned)
 
@@ -236,19 +234,19 @@ if st.button("Analisis"):
         # STEP 4
         # ==================================
 
-        sentiment_result, sentiment_probs = (
-            predict_sentiment(cleaned)
+        sentiment_result, sentiment_probs = predict_sentiment(
+            cleaned
         )
 
-        emotion_result, emotion_probs = (
-            predict_emotion(cleaned)
+        emotion_result, emotion_probs = predict_emotion(
+            cleaned
         )
 
         # ==================================
-        # STEP 5
+        # SENTIMENT
         # ==================================
 
-        st.subheader("4️⃣ Hasil Sentiment")
+        st.subheader("4️⃣ Hasil Sentimen")
 
         col1, col2 = st.columns(2)
 
@@ -263,31 +261,43 @@ if st.button("Analisis"):
 
             st.metric(
                 "Confidence",
-                f"{max(sentiment_probs)*100:.2f}%"
+                f"{np.max(sentiment_probs)*100:.2f}%"
             )
 
+        sentiment_labels = []
+
+        try:
+            for i in range(len(sentiment_probs)):
+                sentiment_labels.append(
+                    sentiment_model.config.id2label[i]
+                )
+        except:
+            for i in range(len(sentiment_probs)):
+                sentiment_labels.append(
+                    sentiment_model.config.id2label[str(i)]
+                )
+
         sentiment_df = pd.DataFrame({
-            "Sentiment":
-            [
-                "Negative",
-                "Neutral",
-                "Positive"
-            ],
-            "Probability":
-            sentiment_probs
+            "Label": sentiment_labels,
+            "Probability": sentiment_probs
         })
 
         st.bar_chart(
             sentiment_df.set_index(
-                "Sentiment"
+                "Label"
             )
         )
 
+        st.dataframe(
+            sentiment_df,
+            use_container_width=True
+        )
+
         # ==================================
-        # STEP 6
+        # EMOTION
         # ==================================
 
-        st.subheader("5️⃣ Hasil Emotion")
+        st.subheader("5️⃣ Hasil Emosi")
 
         col1, col2 = st.columns(2)
 
@@ -302,41 +312,63 @@ if st.button("Analisis"):
 
             st.metric(
                 "Confidence",
-                f"{max(emotion_probs)*100:.2f}%"
+                f"{np.max(emotion_probs)*100:.2f}%"
             )
 
+        emotion_labels = []
+
+        try:
+            for i in range(len(emotion_probs)):
+                emotion_labels.append(
+                    emotion_model.config.id2label[i]
+                )
+        except:
+            for i in range(len(emotion_probs)):
+                emotion_labels.append(
+                    emotion_model.config.id2label[str(i)]
+                )
+
         emotion_df = pd.DataFrame({
-            "Emotion":
-            [
-                "Anger",
-                "Fear",
-                "Happy",
-                "Love",
-                "Sadness"
-            ],
-            "Probability":
-            emotion_probs
+            "Label": emotion_labels,
+            "Probability": emotion_probs
         })
 
         st.bar_chart(
             emotion_df.set_index(
-                "Emotion"
+                "Label"
             )
         )
 
+        st.dataframe(
+            emotion_df,
+            use_container_width=True
+        )
+
         # ==================================
-        # STEP 7
+        # SUMMARY
         # ==================================
 
         st.subheader("6️⃣ Ringkasan")
 
         summary = pd.DataFrame({
-            "Review":[review],
-            "Sentiment":[sentiment_result],
-            "Emotion":[emotion_result]
+            "Review": [review],
+            "Sentiment": [sentiment_result],
+            "Emotion": [emotion_result]
         })
 
         st.dataframe(
             summary,
             use_container_width=True
         )
+
+        # ==================================
+        # RAW PROBABILITY
+        # ==================================
+
+        with st.expander("📊 Detail Probabilitas"):
+
+            st.write("Sentiment Probability")
+            st.write(sentiment_probs)
+
+            st.write("Emotion Probability")
+            st.write(emotion_probs)
