@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -550,4 +550,3 @@ if st.button("🚀 Analisis"):
             summary,
             use_container_width=True
         )
-```
