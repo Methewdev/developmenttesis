@@ -191,6 +191,24 @@ def load_dataset(uploaded_file):
             "|",
             "\t"
         ]
+def load_dataset(uploaded_file):
+
+    try:
+
+        # Excel
+        if uploaded_file.name.endswith(".xlsx"):
+
+            return pd.read_excel(
+                uploaded_file,
+                engine="openpyxl"
+            )
+
+        separators = [
+            ",",
+            ";",
+            "|",
+            "\t"
+        ]
 
         for sep in separators:
 
@@ -198,15 +216,16 @@ def load_dataset(uploaded_file):
 
                 uploaded_file.seek(0)
 
-               df = load_dataset(
-    uploaded_file
-)
+                df = pd.read_csv(
+                    uploaded_file,
+                    sep=sep,
+                    encoding="utf-8",
+                    on_bad_lines="skip"
+                )
 
-if df is None:
+                if len(df.columns) > 1:
+                    return df
 
-    st.stop()
-
-              
             except:
                 pass
 
@@ -225,14 +244,7 @@ if df is None:
         )
 
         return None
-st.success(
-    f"Dataset berhasil dimuat : {len(df)} baris"
-)
-
-st.write(
-    "Kolom ditemukan:",
-    list(df.columns)
-)
+        
 # =====================================================
 # DATASET PREDICTION
 # =====================================================
