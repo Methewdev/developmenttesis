@@ -411,11 +411,84 @@ elif menu == "✍️ Analisis Ulasan":
         st.plotly_chart(
             gauge,
             use_container_width=True
-        )
-
-# =====================================================
+        )# =====================================================
 # DATASET ANALYSIS
 # =====================================================
+
+elif menu == "📁 Analisis Dataset":
+
+    st.title("📁 Analisis Dataset")
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV / XLSX",
+        type=["csv", "xlsx"]
+    )
+
+    if uploaded_file is not None:
+
+        df = load_dataset(
+            uploaded_file
+        )
+
+        if df is None:
+            st.stop()
+
+        st.success(
+            f"Dataset berhasil dimuat : {len(df)} baris"
+        )
+
+        st.write(
+            "Kolom ditemukan:",
+            list(df.columns)
+        )
+
+        st.dataframe(
+            df.head(),
+            use_container_width=True
+        )
+
+        text_column = st.selectbox(
+            "Pilih Kolom Ulasan",
+            df.columns
+        )
+
+        if st.button(
+            "🚀 Analisis Dataset"
+        ):
+
+            with st.spinner(
+                "Sedang memproses..."
+            ):
+
+                result_df = df[
+                    text_column
+                ].apply(
+                    predict_dataset
+                )
+
+                df = pd.concat(
+                    [df, result_df],
+                    axis=1
+                )
+
+            st.success(
+                "Analisis selesai"
+            )
+
+            st.dataframe(
+                df.head(),
+                use_container_width=True
+            )
+
+            csv = df.to_csv(
+                index=False
+            ).encode("utf-8")
+
+            st.download_button(
+                "⬇ Download Hasil",
+                csv,
+                "hasil_analisis.csv",
+                "text/csv"
 # =====================================================
 # DATASET ANALYSIS
 # =====================================================
