@@ -9,26 +9,26 @@ from transformers import (
     AutoModelForSequenceClassification
 )
 
-# =====================================================
+# ==================================================
 # PAGE CONFIG
-# =====================================================
+# ==================================================
 
 st.set_page_config(
-    page_title="Analisis Sentimen & Emosi Livin",
+    page_title="Livin Sentiment & Emotion Analysis",
     page_icon="📊",
     layout="wide"
 )
 
-# =====================================================
-# MODEL REPOSITORY
-# =====================================================
+# ==================================================
+# HUGGING FACE MODEL
+# ==================================================
 
 SENTIMENT_REPO = "envidevelopment/livin-sentiment"
 EMOTION_REPO = "envidevelopment/livin-emotion"
 
-# =====================================================
+# ==================================================
 # LOAD MODEL
-# =====================================================
+# ==================================================
 
 @st.cache_resource
 def load_models():
@@ -68,28 +68,19 @@ try:
 
 except Exception as e:
 
-    st.error(f"Gagal load model : {e}")
+    st.error(f"Gagal load model: {e}")
     st.stop()
 
-# =====================================================
+# ==================================================
 # LABEL
-# =====================================================
+# ==================================================
 
-sentiment_labels = {
-    0: "Negatif",
-    1: "Positif"
-}
+sentiment_labels = sentiment_model.config.id2label
+emotion_labels = emotion_model.config.id2label
 
-emotion_labels = {
-    0: "Marah",
-    1: "Senang",
-    2: "Sedih",
-    3: "Frustrasi"
-}
-
-# =====================================================
-# CLEANING
-# =====================================================
+# ==================================================
+# CLEAN TEXT
+# ==================================================
 
 def clean_text(text):
 
@@ -114,9 +105,9 @@ def clean_text(text):
 
     return text.strip()
 
-# =====================================================
-# SENTIMENT PREDICTION
-# =====================================================
+# ==================================================
+# SENTIMENT
+# ==================================================
 
 def predict_sentiment(text):
 
@@ -144,9 +135,9 @@ def predict_sentiment(text):
 
     return pred, probs.squeeze().tolist()
 
-# =====================================================
-# EMOTION PREDICTION
-# =====================================================
+# ==================================================
+# EMOTION
+# ==================================================
 
 def predict_emotion(text):
 
@@ -174,41 +165,37 @@ def predict_emotion(text):
 
     return pred, probs.squeeze().tolist()
 
-# =====================================================
+# ==================================================
 # HEADER
-# =====================================================
+# ==================================================
 
-st.title("📊 Analisis Sentimen dan Emosi Livin")
+st.title("📊 Livin Sentiment & Emotion Analysis")
 
 st.markdown(
 """
-Model:
-- Sentiment Analysis
-- Emotion Analysis
-
-Berbasis IndoBERT
+Analisis Sentimen dan Emosi menggunakan model IndoBERT
 """
 )
 
-# =====================================================
+# ==================================================
 # INPUT
-# =====================================================
+# ==================================================
 
 text = st.text_area(
     "Masukkan Ulasan",
-    height=200
+    height=180
 )
 
-# =====================================================
+# ==================================================
 # BUTTON
-# =====================================================
+# ==================================================
 
 if st.button("Analisis"):
 
-    if text.strip() == "":
+    if len(text.strip()) == 0:
 
         st.warning(
-            "Masukkan ulasan terlebih dahulu"
+            "Silakan masukkan ulasan terlebih dahulu"
         )
 
     else:
@@ -228,20 +215,24 @@ if st.button("Analisis"):
         )
 
         # ==========================================
-        # SENTIMENT
+        # PREDICTION
         # ==========================================
 
         sent_pred, sent_probs = predict_sentiment(
             cleaned
         )
 
-        # ==========================================
-        # EMOTION
-        # ==========================================
-
         emo_pred, emo_probs = predict_emotion(
             cleaned
         )
+
+        # ==========================================
+        # LABEL PREDICTION
+        # ==========================================
+
+        sent_label = sentiment_labels[sent_pred]
+
+        emo_label = emotion_labels[emo_pred]
 
         # ==========================================
         # RESULT
@@ -253,28 +244,34 @@ if st.button("Analisis"):
 
             st.subheader("Sentimen")
 
-            st.success(
-                sentiment_labels[sent_pred]
-            )
+            if sent_label == "Positive":
+
+                st.success(sent_label)
+
+            elif sent_label == "Neutral":
+
+                st.info(sent_label)
+
+            else:
+
+                st.error(sent_label)
 
         with col2:
 
             st.subheader("Emosi")
 
-            st.info(
-                emotion_labels[emo_pred]
-            )
+            st.success(emo_label)
 
         # ==========================================
-        # CLEANED TEXT
+        # CLEANING RESULT
         # ==========================================
 
         st.subheader("Hasil Cleaning")
 
-        st.write(cleaned)
+        st.code(cleaned)
 
         # ==========================================
-        # TOKENS
+        # TOKENIZATION
         # ==========================================
 
         st.subheader("Tokenisasi IndoBERT")
@@ -287,9 +284,12 @@ if st.button("Analisis"):
 
         sent_df = pd.DataFrame({
 
-            "Label": list(
-                sentiment_labels.values()
-            ),
+            "Label": [
+                sentiment_labels[i]
+                for i in range(
+                    len(sent_probs)
+                )
+            ],
 
             "Probabilitas": sent_probs
         })
@@ -312,9 +312,12 @@ if st.button("Analisis"):
 
         emo_df = pd.DataFrame({
 
-            "Label": list(
-                emotion_labels.values()
-            ),
+            "Label": [
+                emotion_labels[i]
+                for i in range(
+                    len(emo_probs)
+                )
+            ],
 
             "Probabilitas": emo_probs
         })
@@ -334,6 +337,15 @@ if st.button("Analisis"):
         # ==========================================
         # TABLE
         # ==========================================
+
+        st.subheader(
+            "Detail Probabilitas Sentimen"
+        )
+
+        st.dataframe(
+            sent_df,
+            use_container_width=True
+        )
 
         st.subheader(
             "Detail Probabilitas Emosi"
