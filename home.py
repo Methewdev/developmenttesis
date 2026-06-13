@@ -3,32 +3,33 @@ import pandas as pd
 import torch
 import re
 import plotly.express as px
+from collections import Counter
 
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification
 )
 
-# ==================================================
-# PAGE CONFIG
-# ==================================================
+# =====================================================
+# CONFIG
+# =====================================================
 
 st.set_page_config(
-    page_title="Livin Sentiment & Emotion Analysis",
+    page_title="Livin Sentiment & Emotion Dashboard",
     page_icon="📊",
     layout="wide"
 )
 
-# ==================================================
-# HUGGING FACE MODEL
-# ==================================================
+# =====================================================
+# MODEL REPOSITORY
+# =====================================================
 
 SENTIMENT_REPO = "envidevelopment/livin-sentiment"
 EMOTION_REPO = "envidevelopment/livin-emotion"
 
-# ==================================================
+# =====================================================
 # LOAD MODEL
-# ==================================================
+# =====================================================
 
 @st.cache_resource
 def load_models():
@@ -56,35 +57,27 @@ def load_models():
         emotion_model
     )
 
+(
+    sentiment_tokenizer,
+    sentiment_model,
+    emotion_tokenizer,
+    emotion_model
+) = load_models()
 
-try:
-
-    (
-        sentiment_tokenizer,
-        sentiment_model,
-        emotion_tokenizer,
-        emotion_model
-    ) = load_models()
-
-except Exception as e:
-
-    st.error(f"Gagal load model: {e}")
-    st.stop()
-
-# ==================================================
+# =====================================================
 # LABEL
-# ==================================================
+# =====================================================
 
 sentiment_labels = sentiment_model.config.id2label
 emotion_labels = emotion_model.config.id2label
 
-# ==================================================
-# CLEAN TEXT
-# ==================================================
+# =====================================================
+# PREPROCESSING
+# =====================================================
 
 def clean_text(text):
 
-    text = text.lower()
+    text = str(text).lower()
 
     text = re.sub(r"http\S+", "", text)
     text = re.sub(r"www\S+", "", text)
@@ -105,9 +98,9 @@ def clean_text(text):
 
     return text.strip()
 
-# ==================================================
+# =====================================================
 # SENTIMENT
-# ==================================================
+# =====================================================
 
 def predict_sentiment(text):
 
@@ -135,9 +128,9 @@ def predict_sentiment(text):
 
     return pred, probs.squeeze().tolist()
 
-# ==================================================
+# =====================================================
 # EMOTION
-# ==================================================
+# =====================================================
 
 def predict_emotion(text):
 
@@ -165,58 +158,82 @@ def predict_emotion(text):
 
     return pred, probs.squeeze().tolist()
 
-# ==================================================
-# HEADER
-# ==================================================
+# =====================================================
+# BATCH PREDICTION
+# =====================================================
 
-st.title("📊 Livin Sentiment & Emotion Analysis")
+def predict_dataset(text):
 
-st.markdown(
-"""
-Analisis Sentimen dan Emosi menggunakan model IndoBERT
-"""
+    text = clean_text(text)
+
+    sent_pred, _ = predict_sentiment(text)
+    emo_pred, _ = predict_emotion(text)
+
+    return pd.Series({
+        "sentiment": sentiment_labels[sent_pred],
+        "emotion": emotion_labels[emo_pred]
+    })
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+
+menu = st.sidebar.radio(
+    "Menu",
+    [
+        "🏠 Home",
+        "✍️ Analisis Ulasan",
+        "📁 Analisis Dataset"
+    ]
 )
 
-# ==================================================
-# INPUT
-# ==================================================
+# =====================================================
+# HOME
+# =====================================================
 
-text = st.text_area(
-    "Masukkan Ulasan",
-    height=180
-)
+if menu == "🏠 Home":
 
-# ==================================================
-# BUTTON
-# ==================================================
+    st.title("📊 Livin Dashboard")
 
-if st.button("Analisis"):
+    col1, col2 = st.columns(2)
 
-    if len(text.strip()) == 0:
+    with col1:
 
-        st.warning(
-            "Silakan masukkan ulasan terlebih dahulu"
+        st.metric(
+            "Sentiment Classes",
+            sentiment_model.config.num_labels
         )
 
-    else:
+    with col2:
 
-        # ==========================================
-        # CLEANING
-        # ==========================================
+        st.metric(
+            "Emotion Classes",
+            emotion_model.config.num_labels
+        )
+
+    st.subheader("Sentiment Labels")
+
+    st.json(sentiment_labels)
+
+    st.subheader("Emotion Labels")
+
+    st.json(emotion_labels)
+
+# =====================================================
+# SINGLE PREDICTION
+# =====================================================
+
+elif menu == "✍️ Analisis Ulasan":
+
+    st.title("Analisis Ulasan")
+
+    text = st.text_area(
+        "Masukkan Ulasan"
+    )
+
+    if st.button("Analisis"):
 
         cleaned = clean_text(text)
-
-        # ==========================================
-        # TOKENIZATION
-        # ==========================================
-
-        tokens = sentiment_tokenizer.tokenize(
-            cleaned
-        )
-
-        # ==========================================
-        # PREDICTION
-        # ==========================================
 
         sent_pred, sent_probs = predict_sentiment(
             cleaned
@@ -226,132 +243,183 @@ if st.button("Analisis"):
             cleaned
         )
 
-        # ==========================================
-        # LABEL PREDICTION
-        # ==========================================
+        st.success(
+            f"Sentiment: {sentiment_labels[sent_pred]}"
+        )
 
-        sent_label = sentiment_labels[sent_pred]
+        st.info(
+            f"Emotion: {emotion_labels[emo_pred]}"
+        )
 
-        emo_label = emotion_labels[emo_pred]
-
-        # ==========================================
-        # RESULT
-        # ==========================================
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.subheader("Sentimen")
-
-            if sent_label == "Positive":
-
-                st.success(sent_label)
-
-            elif sent_label == "Neutral":
-
-                st.info(sent_label)
-
-            else:
-
-                st.error(sent_label)
-
-        with col2:
-
-            st.subheader("Emosi")
-
-            st.success(emo_label)
-
-        # ==========================================
-        # CLEANING RESULT
-        # ==========================================
-
-        st.subheader("Hasil Cleaning")
+        st.subheader("Cleaning")
 
         st.code(cleaned)
 
-        # ==========================================
-        # TOKENIZATION
-        # ==========================================
+# =====================================================
+# DATASET
+# =====================================================
 
-        st.subheader("Tokenisasi IndoBERT")
+elif menu == "📁 Analisis Dataset":
 
-        st.write(tokens[:100])
+    st.title("Analisis Dataset")
 
-        # ==========================================
-        # SENTIMENT CHART
-        # ==========================================
+    uploaded_file = st.file_uploader(
+        "Upload CSV",
+        type=["csv"]
+    )
 
-        sent_df = pd.DataFrame({
+    if uploaded_file:
 
-            "Label": [
-                sentiment_labels[i]
-                for i in range(
-                    len(sent_probs)
-                )
-            ],
-
-            "Probabilitas": sent_probs
-        })
-
-        fig1 = px.bar(
-            sent_df,
-            x="Label",
-            y="Probabilitas",
-            title="Probabilitas Sentimen"
-        )
-
-        st.plotly_chart(
-            fig1,
-            use_container_width=True
-        )
-
-        # ==========================================
-        # EMOTION CHART
-        # ==========================================
-
-        emo_df = pd.DataFrame({
-
-            "Label": [
-                emotion_labels[i]
-                for i in range(
-                    len(emo_probs)
-                )
-            ],
-
-            "Probabilitas": emo_probs
-        })
-
-        fig2 = px.bar(
-            emo_df,
-            x="Label",
-            y="Probabilitas",
-            title="Probabilitas Emosi"
-        )
-
-        st.plotly_chart(
-            fig2,
-            use_container_width=True
-        )
-
-        # ==========================================
-        # TABLE
-        # ==========================================
-
-        st.subheader(
-            "Detail Probabilitas Sentimen"
+        df = pd.read_csv(
+            uploaded_file
         )
 
         st.dataframe(
-            sent_df,
-            use_container_width=True
+            df.head()
         )
 
-        st.subheader(
-            "Detail Probabilitas Emosi"
+        text_column = st.selectbox(
+            "Pilih Kolom Ulasan",
+            df.columns
         )
 
-        st.dataframe(
-            emo_df,
-            use_container_width=True
-        )
+        if st.button(
+            "Analisis Dataset"
+        ):
+
+            with st.spinner(
+                "Sedang memproses..."
+            ):
+
+                result_df = df[
+                    text_column
+                ].apply(
+                    predict_dataset
+                )
+
+                df = pd.concat(
+                    [
+                        df,
+                        result_df
+                    ],
+                    axis=1
+                )
+
+            st.success(
+                "Analisis selesai"
+            )
+
+            # Dashboard
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Total Ulasan",
+                len(df)
+            )
+
+            col2.metric(
+                "Sentimen Dominan",
+                df["sentiment"].mode()[0]
+            )
+
+            col3.metric(
+                "Emosi Dominan",
+                df["emotion"].mode()[0]
+            )
+
+            # Sentiment
+
+            sent_count = (
+                df["sentiment"]
+                .value_counts()
+                .reset_index()
+            )
+
+            sent_count.columns = [
+                "Sentiment",
+                "Total"
+            ]
+
+            fig_sent = px.pie(
+                sent_count,
+                names="Sentiment",
+                values="Total"
+            )
+
+            st.plotly_chart(
+                fig_sent,
+                use_container_width=True
+            )
+
+            # Emotion
+
+            emo_count = (
+                df["emotion"]
+                .value_counts()
+                .reset_index()
+            )
+
+            emo_count.columns = [
+                "Emotion",
+                "Total"
+            ]
+
+            fig_emo = px.bar(
+                emo_count,
+                x="Emotion",
+                y="Total",
+                text_auto=True
+            )
+
+            st.plotly_chart(
+                fig_emo,
+                use_container_width=True
+            )
+
+            # Top Words
+
+            all_text = " ".join(
+                df[text_column]
+                .astype(str)
+            )
+
+            top_words = Counter(
+                all_text.split()
+            ).most_common(10)
+
+            word_df = pd.DataFrame(
+                top_words,
+                columns=[
+                    "Word",
+                    "Frequency"
+                ]
+            )
+
+            fig_word = px.bar(
+                word_df,
+                x="Word",
+                y="Frequency",
+                title="Top 10 Words"
+            )
+
+            st.plotly_chart(
+                fig_word,
+                use_container_width=True
+            )
+
+            st.dataframe(
+                df,
+                use_container_width=True
+            )
+
+            csv = df.to_csv(
+                index=False
+            ).encode("utf-8")
+
+            st.download_button(
+                "⬇ Download Hasil",
+                csv,
+                "hasil_analisis.csv",
+                "text/csv"
+            )
