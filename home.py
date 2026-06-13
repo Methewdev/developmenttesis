@@ -1,10 +1,13 @@
+# app.py
 
+```python
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
 import torch
+import re
 import plotly.express as px
+import plotly.graph_objects as go
+from collections import Counter
 
 from transformers import (
     AutoTokenizer,
@@ -12,39 +15,21 @@ from transformers import (
 )
 
 # =====================================================
-# PAGE CONFIG
+# CONFIG
 # =====================================================
 
 st.set_page_config(
-    page_title="Livin Review Analysis",
-    page_icon="📱",
+    page_title="Livin Sentiment & Emotion Dashboard",
+    page_icon="📊",
     layout="wide"
 )
 
 # =====================================================
-# CUSTOM CSS
+# MODEL REPOSITORY
 # =====================================================
 
-st.markdown("""
-<style>
-
-.main {
-    padding-top: 1rem;
-}
-
-.metric-card {
-    background-color:#f5f5f5;
-    padding:20px;
-    border-radius:15px;
-    text-align:center;
-}
-
-.block-container {
-    padding-top:2rem;
-}
-
-</style>
-""", unsafe_allow_html=True)
+SENTIMENT_REPO = "envidevelopment/livin-sentiment"
+EMOTION_REPO = "envidevelopment/livin-emotion"
 
 # =====================================================
 # LOAD MODEL
@@ -53,29 +38,21 @@ st.markdown("""
 @st.cache_resource
 def load_models():
 
-    sentiment_repo = "envidevelopment/livin-sentiment"
-    emotion_repo = "envidevelopment/livin-emotion"
-
     sentiment_tokenizer = AutoTokenizer.from_pretrained(
-        sentiment_repo
+        SENTIMENT_REPO
     )
 
-    sentiment_model = (
-        AutoModelForSequenceClassification
-        .from_pretrained(sentiment_repo)
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained(
+        SENTIMENT_REPO
     )
 
     emotion_tokenizer = AutoTokenizer.from_pretrained(
-        emotion_repo
+        EMOTION_REPO
     )
 
-    emotion_model = (
-        AutoModelForSequenceClassification
-        .from_pretrained(emotion_repo)
+    emotion_model = AutoModelForSequenceClassification.from_pretrained(
+        EMOTION_REPO
     )
-
-    sentiment_model.eval()
-    emotion_model.eval()
 
     return (
         sentiment_tokenizer,
@@ -84,42 +61,26 @@ def load_models():
         emotion_model
     )
 
-(
-    sentiment_tokenizer,
-    sentiment_model,
-    emotion_tokenizer,
-    emotion_model
-) = load_models()
+try:
+
+    (
+        sentiment_tokenizer,
+        sentiment_model,
+        emotion_tokenizer,
+        emotion_model
+    ) = load_models()
+
+except Exception as e:
+
+    st.error(f"Gagal memuat model: {e}")
+    st.stop()
 
 # =====================================================
-# SIDEBAR
+# LABEL
 # =====================================================
 
-with st.sidebar:
-
-    st.title("📱 Livin Analysis")
-
-    st.markdown("---")
-
-    st.success("Sentiment Model Loaded")
-    st.success("Emotion Model Loaded")
-
-    st.markdown("---")
-
-    st.subheader("Model Sentiment")
-    st.caption(sentiment_model.name_or_path)
-
-    st.subheader("Model Emotion")
-    st.caption(emotion_model.name_or_path)
-
-    st.markdown("---")
-
-    st.info(
-        """
-        Analisis Sentimen dan Emosi
-        menggunakan Transformer IndoBERT
-        """
-    )
+sentiment_labels = sentiment_model.config.id2label
+emotion_labels = emotion_model.config.id2label
 
 # =====================================================
 # PREPROCESSING
@@ -127,12 +88,12 @@ with st.sidebar:
 
 def clean_text(text):
 
-    text = str(text)
+    text = str(text).lower()
 
     text = re.sub(r"http\S+", "", text)
     text = re.sub(r"www\S+", "", text)
-    text = re.sub(r"@[A-Za-z0-9_]+", "", text)
-    text = re.sub(r"#", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#\w+", "", text)
 
     text = re.sub(
         r"[^a-zA-Z0-9\s]",
@@ -149,7 +110,7 @@ def clean_text(text):
     return text.strip()
 
 # =====================================================
-# SENTIMENT
+# PREDICT SENTIMENT
 # =====================================================
 
 def predict_sentiment(text):
@@ -159,33 +120,27 @@ def predict_sentiment(text):
         return_tensors="pt",
         truncation=True,
         padding=True,
-        max_length=256
+        max_length=128
     )
 
     with torch.no_grad():
 
-        outputs = sentiment_model(
-            **inputs
-        )
+        outputs = sentiment_model(**inputs)
 
         probs = torch.softmax(
             outputs.logits,
             dim=1
-        ).cpu().numpy()[0]
+        )
 
-    pred = int(np.argmax(probs))
+        pred = torch.argmax(
+            probs,
+            dim=1
+        ).item()
 
-    label = (
-        sentiment_model
-        .config
-        .id2label
-        .get(pred)
-    )
-
-    return label, probs
+    return pred, probs.squeeze().tolist()
 
 # =====================================================
-# EMOTION
+# PREDICT EMOTION
 # =====================================================
 
 def predict_emotion(text):
@@ -195,300 +150,365 @@ def predict_emotion(text):
         return_tensors="pt",
         truncation=True,
         padding=True,
-        max_length=256
+        max_length=128
     )
 
     with torch.no_grad():
 
-        outputs = emotion_model(
-            **inputs
-        )
+        outputs = emotion_model(**inputs)
 
         probs = torch.softmax(
             outputs.logits,
             dim=1
-        ).cpu().numpy()[0]
+        )
 
-    pred = int(np.argmax(probs))
+        pred = torch.argmax(
+            probs,
+            dim=1
+        ).item()
 
-    label = (
-        emotion_model
-        .config
-        .id2label
-        .get(pred)
-    )
-
-    return label, probs
+    return pred, probs.squeeze().tolist()
 
 # =====================================================
-# HEADER
+# DATASET PREDICTION
 # =====================================================
 
-st.markdown("""
-<h1 style='text-align:center'>
-📱 Livin Review Analysis
-</h1>
+def predict_dataset(text):
 
-<h4 style='text-align:center;color:gray'>
-Sentiment & Emotion Analysis using IndoBERT
-</h4>
+    text = clean_text(text)
 
-<hr>
-""", unsafe_allow_html=True)
+    sent_pred, _ = predict_sentiment(text)
+    emo_pred, _ = predict_emotion(text)
+
+    return pd.Series({
+        "sentiment": sentiment_labels[sent_pred],
+        "emotion": emotion_labels[emo_pred]
+    })
 
 # =====================================================
-# INPUT
+# SIDEBAR
 # =====================================================
 
-review = st.text_area(
-    "Masukkan Ulasan",
-    height=200,
-    placeholder="Contoh : Aplikasi sangat membantu transaksi saya..."
+menu = st.sidebar.radio(
+    "Menu",
+    [
+        "🏠 Home",
+        "✍️ Analisis Ulasan",
+        "📁 Analisis Dataset"
+    ]
 )
 
 # =====================================================
-# BUTTON
+# HOME
 # =====================================================
 
-if st.button("🚀 Analisis", use_container_width=True):
+if menu == "🏠 Home":
 
-    if not review.strip():
+    st.title("📊 Livin Sentiment & Emotion Dashboard")
 
-        st.warning(
-            "Masukkan ulasan terlebih dahulu"
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Jumlah Label Sentiment",
+            sentiment_model.config.num_labels
         )
 
-    else:
-
-        cleaned = clean_text(review)
-
-        tokens = (
-            sentiment_tokenizer
-            .tokenize(cleaned)
+    with col2:
+        st.metric(
+            "Jumlah Label Emotion",
+            emotion_model.config.num_labels
         )
 
-        sentiment_result, sentiment_probs = (
-            predict_sentiment(cleaned)
+    st.subheader("Sentiment Labels")
+    st.json(sentiment_labels)
+
+    st.subheader("Emotion Labels")
+    st.json(emotion_labels)
+
+# =====================================================
+# SINGLE ANALYSIS
+# =====================================================
+
+elif menu == "✍️ Analisis Ulasan":
+
+    st.title("✍️ Analisis Ulasan")
+
+    text = st.text_area(
+        "Masukkan Ulasan",
+        height=180
+    )
+
+    if st.button("Analisis"):
+
+        cleaned = clean_text(text)
+
+        tokens = sentiment_tokenizer.tokenize(
+            cleaned
         )
 
-        emotion_result, emotion_probs = (
-            predict_emotion(cleaned)
+        token_ids = sentiment_tokenizer.convert_tokens_to_ids(
+            tokens
         )
 
-        sentiment_conf = (
-            np.max(sentiment_probs) * 100
+        sent_pred, sent_probs = predict_sentiment(
+            cleaned
         )
 
-        emotion_conf = (
-            np.max(emotion_probs) * 100
+        emo_pred, emo_probs = predict_emotion(
+            cleaned
         )
 
-        # =====================================
-        # RESULT
-        # =====================================
+        sent_label = sentiment_labels[sent_pred]
+        emo_label = emotion_labels[emo_pred]
 
-        st.subheader("📊 Hasil Analisis")
+        sent_conf = max(sent_probs) * 100
+        emo_conf = max(emo_probs) * 100
 
         col1, col2 = st.columns(2)
 
         with col1:
-
-            st.metric(
-                "Sentiment",
-                sentiment_result
-            )
-
-            st.progress(
-                int(sentiment_conf)
-            )
-
-            st.write(
-                f"Confidence : {sentiment_conf:.2f}%"
+            st.success(
+                f"Sentiment : {sent_label}"
             )
 
         with col2:
-
-            st.metric(
-                "Emotion",
-                emotion_result
+            st.info(
+                f"Emotion : {emo_label}"
             )
 
-            st.progress(
-                int(emotion_conf)
-            )
+        st.subheader("Preprocessing")
 
-            st.write(
-                f"Confidence : {emotion_conf:.2f}%"
-            )
+        st.write("Original Text")
+        st.code(text)
 
-        # =====================================
-        # NLP STATS
-        # =====================================
+        st.write("Cleaned Text")
+        st.code(cleaned)
 
-        st.subheader("🔤 NLP Statistics")
+        st.subheader("Tokenization")
 
-        c1, c2, c3 = st.columns(3)
+        st.write(tokens)
 
-        c1.metric(
-            "Characters",
-            len(review)
-        )
+        st.subheader("Token IDs")
 
-        c2.metric(
-            "Words",
-            len(review.split())
-        )
+        st.write(token_ids)
 
-        c3.metric(
-            "Tokens",
-            len(tokens)
-        )
-
-        # =====================================
-        # REVIEW
-        # =====================================
-
-        st.subheader("📝 Review")
-
-        st.info(review)
-
-        # =====================================
-        # SENTIMENT CHART
-        # =====================================
-
-        sentiment_labels = [
-
-            sentiment_model
-            .config
-            .id2label[i]
-
-            for i in range(
-                len(sentiment_probs)
-            )
-        ]
-
-        sentiment_df = pd.DataFrame({
-
-            "Label":
-            sentiment_labels,
-
-            "Probability":
-            sentiment_probs
-
+        sent_df = pd.DataFrame({
+            "Label":[
+                sentiment_labels[i]
+                for i in range(len(sent_probs))
+            ],
+            "Probability":sent_probs
         })
 
-        st.subheader(
-            "📈 Sentiment Distribution"
-        )
+        emo_df = pd.DataFrame({
+            "Label":[
+                emotion_labels[i]
+                for i in range(len(emo_probs))
+            ],
+            "Probability":emo_probs
+        })
 
-        fig = px.bar(
-            sentiment_df,
+        st.subheader("Distribusi Sentiment")
+
+        fig_sent = px.bar(
+            sent_df,
             x="Label",
             y="Probability",
-            text="Probability"
+            text_auto=".2%"
         )
 
         st.plotly_chart(
-            fig,
+            fig_sent,
             use_container_width=True
         )
 
-        # =====================================
-        # EMOTION CHART
-        # =====================================
+        st.subheader("Distribusi Emotion")
 
-        emotion_labels = [
+        fig_emo = px.bar(
+            emo_df,
+            x="Label",
+            y="Probability",
+            text_auto=".2%"
+        )
 
-            emotion_model
-            .config
-            .id2label[i]
+        st.plotly_chart(
+            fig_emo,
+            use_container_width=True
+        )
 
-            for i in range(
-                len(emotion_probs)
+        gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=sent_conf,
+                title={
+                    "text":"Sentiment Confidence"
+                }
             )
-        ]
-
-        emotion_df = pd.DataFrame({
-
-            "Label":
-            emotion_labels,
-
-            "Probability":
-            emotion_probs
-
-        })
-
-        st.subheader(
-            "🎭 Emotion Distribution"
-        )
-
-        fig2 = px.pie(
-            emotion_df,
-            values="Probability",
-            names="Label",
-            hole=0.5
         )
 
         st.plotly_chart(
-            fig2,
+            gauge,
             use_container_width=True
         )
 
-        # =====================================
-        # TABLE RESULT
-        # =====================================
+# =====================================================
+# DATASET ANALYSIS
+# =====================================================
 
-        st.subheader(
-            "📋 Ringkasan"
+elif menu == "📁 Analisis Dataset":
+
+    st.title("📁 Analisis Dataset")
+
+    uploaded_file = st.file_uploader(
+        "Upload CSV",
+        type=["csv"]
+    )
+
+    if uploaded_file:
+
+        df = pd.read_csv(
+            uploaded_file
         )
-
-        summary = pd.DataFrame({
-
-            "Review":[review],
-
-            "Sentiment":[
-                sentiment_result
-            ],
-
-            "Emotion":[
-                emotion_result
-            ]
-
-        })
 
         st.dataframe(
-            summary,
+            df.head(),
             use_container_width=True
         )
 
-        # =====================================
-        # TECHNICAL DETAIL
-        # =====================================
+        text_column = st.selectbox(
+            "Pilih Kolom Ulasan",
+            df.columns
+        )
 
-        with st.expander(
-            "⚙️ Technical Details"
+        if st.button(
+            "🚀 Analisis Dataset"
         ):
 
-            st.write(
-                "Clean Text"
+            with st.spinner(
+                "Sedang memproses..."
+            ):
+
+                result_df = df[
+                    text_column
+                ].apply(
+                    predict_dataset
+                )
+
+                df = pd.concat(
+                    [df, result_df],
+                    axis=1
+                )
+
+            st.success(
+                "Analisis selesai"
             )
 
-            st.code(cleaned)
+            col1, col2, col3 = st.columns(3)
 
-            st.write(
-                "Tokens"
+            col1.metric(
+                "Total Ulasan",
+                len(df)
             )
 
-            st.write(tokens)
-
-            st.write(
-                "Sentiment Probability"
+            col2.metric(
+                "Sentimen Dominan",
+                df["sentiment"].mode()[0]
             )
 
-            st.write(sentiment_df)
-
-            st.write(
-                "Emotion Probability"
+            col3.metric(
+                "Emosi Dominan",
+                df["emotion"].mode()[0]
             )
 
-            st.write(emotion_df)
+            sent_count = (
+                df["sentiment"]
+                .value_counts()
+                .reset_index()
+            )
+
+            sent_count.columns = [
+                "Sentiment",
+                "Total"
+            ]
+
+            fig_sent = px.pie(
+                sent_count,
+                names="Sentiment",
+                values="Total",
+                hole=0.4
+            )
+
+            st.plotly_chart(
+                fig_sent,
+                use_container_width=True
+            )
+
+            emo_count = (
+                df["emotion"]
+                .value_counts()
+                .reset_index()
+            )
+
+            emo_count.columns = [
+                "Emotion",
+                "Total"
+            ]
+
+            fig_emo = px.bar(
+                emo_count,
+                x="Emotion",
+                y="Total",
+                text_auto=True
+            )
+
+            st.plotly_chart(
+                fig_emo,
+                use_container_width=True
+            )
+
+            all_text = " ".join(
+                df[text_column]
+                .astype(str)
+            )
+
+            top_words = Counter(
+                all_text.split()
+            ).most_common(10)
+
+            word_df = pd.DataFrame(
+                top_words,
+                columns=[
+                    "Word",
+                    "Frequency"
+                ]
+            )
+
+            fig_word = px.bar(
+                word_df,
+                x="Word",
+                y="Frequency",
+                title="Top 10 Words"
+            )
+
+            st.plotly_chart(
+                fig_word,
+                use_container_width=True
+            )
+
+            st.dataframe(
+                df,
+                use_container_width=True
+            )
+
+            csv = df.to_csv(
+                index=False
+            ).encode("utf-8")
+
+            st.download_button(
+                "⬇ Download Hasil",
+                csv,
+                "hasil_analisis.csv",
+                "text/csv"
+            )
+```
