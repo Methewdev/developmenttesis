@@ -168,7 +168,72 @@ def predict_emotion(text):
         ).item()
 
     return pred, probs.squeeze().tolist()
+# =====================================================
+# LOAD DATASET
+# =====================================================
 
+def load_dataset(uploaded_file):
+
+    try:
+
+        # Excel
+        if uploaded_file.name.endswith(".xlsx"):
+
+            return pd.read_excel(
+                uploaded_file,
+                engine="openpyxl"
+            )
+
+        # CSV Auto Separator
+        separators = [
+            ",",
+            ";",
+            "|",
+            "\t"
+        ]
+
+        for sep in separators:
+
+            try:
+
+                uploaded_file.seek(0)
+
+               df = load_dataset(
+                    uploaded_file,
+                    sep=sep,
+                    encoding="utf-8",
+                    on_bad_lines="skip"
+                )
+
+                if len(df.columns) > 1:
+                    return df
+
+            except:
+                pass
+
+        uploaded_file.seek(0)
+
+        return pd.read_csv(
+            uploaded_file,
+            encoding="latin1",
+            on_bad_lines="skip"
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Gagal membaca dataset : {e}"
+        )
+
+        return None
+st.success(
+    f"Dataset berhasil dimuat : {len(df)} baris"
+)
+
+st.write(
+    "Kolom ditemukan:",
+    list(df.columns)
+)
 # =====================================================
 # DATASET PREDICTION
 # =====================================================
@@ -361,9 +426,9 @@ elif menu == "📁 Analisis Dataset":
     st.title("📁 Analisis Dataset")
 
     uploaded_file = st.file_uploader(
-        "Upload CSV",
-        type=["csv"]
-    )
+    "Upload CSV / XLSX",
+    type=["csv", "xlsx"]
+)
 
     if uploaded_file:
 
