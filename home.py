@@ -24,22 +24,45 @@ st.set_page_config(
 # =====================================================
 
 @st.cache_resource
-def load_model():
+def load_models():
 
-    MODEL_NAME = "username/model-sentiment"
+    sentiment_repo = "envidevelopment/livin-sentiment"
+    emotion_repo = "envidevelopment/livin-emotion"
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME
+    sentiment_tokenizer = AutoTokenizer.from_pretrained(
+        sentiment_repo
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME
+    sentiment_model = (
+        AutoModelForSequenceClassification
+        .from_pretrained(sentiment_repo)
     )
 
-    return tokenizer, model
+    emotion_tokenizer = AutoTokenizer.from_pretrained(
+        emotion_repo
+    )
 
+    emotion_model = (
+        AutoModelForSequenceClassification
+        .from_pretrained(emotion_repo)
+    )
 
-tokenizer, model = load_model()
+    sentiment_model.eval()
+    emotion_model.eval()
+
+    return (
+        sentiment_tokenizer,
+        sentiment_model,
+        emotion_tokenizer,
+        emotion_model
+    )
+
+(
+    sentiment_tokenizer,
+    sentiment_model,
+    emotion_tokenizer,
+    emotion_model
+) = load_models()
 
 # =====================================================
 # LABEL
