@@ -54,7 +54,7 @@ st.markdown("""
 def load_models():
 
     sentiment_repo = "envidevelopment/livin-sentiment"
-    emotion_repo = "envidevelopment/livin_emotion"
+    emotion_repo = "envidevelopment/livin-emotion"
 
     sentiment_tokenizer = AutoTokenizer.from_pretrained(
         sentiment_repo
