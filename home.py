@@ -416,24 +416,37 @@ elif menu == "✍️ Analisis Ulasan":
 # =====================================================
 # DATASET ANALYSIS
 # =====================================================
+# =====================================================
+# DATASET ANALYSIS
+# =====================================================
 
 elif menu == "📁 Analisis Dataset":
 
     st.title("📁 Analisis Dataset")
 
     uploaded_file = st.file_uploader(
-    "Upload CSV / XLSX",
-    type=["csv", "xlsx"]
-)
+        "Upload CSV / XLSX",
+        type=["csv", "xlsx"]
+    )
 
-    if uploaded_file:
+    if uploaded_file is not None:
 
-        df = load.dataset(
+        df = load_dataset(
             uploaded_file
         )
-if df is None:
-    st.stop()
-    
+
+        if df is None:
+            st.stop()
+
+        st.success(
+            f"Dataset berhasil dimuat : {len(df)} baris"
+        )
+
+        st.write(
+            "Kolom ditemukan:",
+            list(df.columns)
+        )
+
         st.dataframe(
             df.head(),
             use_container_width=True
@@ -467,100 +480,8 @@ if df is None:
                 "Analisis selesai"
             )
 
-            col1, col2, col3 = st.columns(3)
-
-            col1.metric(
-                "Total Ulasan",
-                len(df)
-            )
-
-            col2.metric(
-                "Sentimen Dominan",
-                df["sentiment"].mode()[0]
-            )
-
-            col3.metric(
-                "Emosi Dominan",
-                df["emotion"].mode()[0]
-            )
-
-            sent_count = (
-                df["sentiment"]
-                .value_counts()
-                .reset_index()
-            )
-
-            sent_count.columns = [
-                "Sentiment",
-                "Total"
-            ]
-
-            fig_sent = px.pie(
-                sent_count,
-                names="Sentiment",
-                values="Total",
-                hole=0.4
-            )
-
-            st.plotly_chart(
-                fig_sent,
-                use_container_width=True
-            )
-
-            emo_count = (
-                df["emotion"]
-                .value_counts()
-                .reset_index()
-            )
-
-            emo_count.columns = [
-                "Emotion",
-                "Total"
-            ]
-
-            fig_emo = px.bar(
-                emo_count,
-                x="Emotion",
-                y="Total",
-                text_auto=True
-            )
-
-            st.plotly_chart(
-                fig_emo,
-                use_container_width=True
-            )
-
-            all_text = " ".join(
-                df[text_column]
-                .astype(str)
-            )
-
-            top_words = Counter(
-                all_text.split()
-            ).most_common(10)
-
-            word_df = pd.DataFrame(
-                top_words,
-                columns=[
-                    "Word",
-                    "Frequency"
-                ]
-            )
-
-            fig_word = px.bar(
-                word_df,
-                x="Word",
-                y="Frequency",
-                title="Top 10 Words"
-            )
-
-            st.plotly_chart(
-                fig_word,
-                use_container_width=True
-            )
-
             st.dataframe(
-                df,
+                df.head(),
                 use_container_width=True
             )
 
@@ -574,4 +495,3 @@ if df is None:
                 "hasil_analisis.csv",
                 "text/csv"
             )
-
