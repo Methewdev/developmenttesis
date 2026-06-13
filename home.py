@@ -151,77 +151,19 @@ text = st.text_area(
 if st.button("Analisis"):
 
     if text.strip() == "":
-
-        st.warning(
-            "Masukkan ulasan terlebih dahulu"
-        )
+        st.warning("Masukkan ulasan terlebih dahulu")
 
     else:
 
-        # -----------------------------------------
-        # PREPROCESSING
-        # -----------------------------------------
-
         cleaned = clean_text(text)
 
-        # -----------------------------------------
-        # TOKENIZATION
-        # -----------------------------------------
+        st.write("Hasil Cleaning:")
+        st.write(cleaned)
 
         tokens = tokenizer.tokenize(cleaned)
 
-        token_ids = tokenizer.convert_tokens_to_ids(
-            tokens
-        )
-
-        # -----------------------------------------
-        # PREDICTION
-        # -----------------------------------------
-
-        pred, probs = predict_sentiment(
-            cleaned
-        )
-
-        label = id2label[pred]
-
-        # -----------------------------------------
-        # RESULT
-        # -----------------------------------------
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.subheader(
-                "Preprocessing"
-            )
-
-            st.write(cleaned)
-
-            st.subheader(
-                "Tokenisasi"
-            )
-
-            st.write(tokens[:50])
-
-        with col2:
-
-            st.subheader(
-                "Hasil Prediksi"
-            )
-
-            if label == "Positif":
-
-                st.success(
-                    f"Sentimen : {label}"
-                )
-
-            else:
-
-                st.error(
-                    f"Sentimen : {label}"
-                )
-
+        st.write("Tokens:")
+        st.write(tokens[:50])
         # -----------------------------------------
         # PROBABILITY
         # -----------------------------------------
