@@ -199,15 +199,14 @@ def load_dataset(uploaded_file):
                 uploaded_file.seek(0)
 
                df = load_dataset(
-                    uploaded_file,
-                    sep=sep,
-                    encoding="utf-8",
-                    on_bad_lines="skip"
-                )
+    uploaded_file
+)
 
-                if len(df.columns) > 1:
-                    return df
+if df is None:
 
+    st.stop()
+
+              
             except:
                 pass
 
