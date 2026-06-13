@@ -1,6 +1,6 @@
 # app.py
 
-```python
+
 import streamlit as st
 import pandas as pd
 import torch
@@ -511,4 +511,3 @@ elif menu == "📁 Analisis Dataset":
                 "hasil_analisis.csv",
                 "text/csv"
             )
-```
