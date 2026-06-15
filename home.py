@@ -484,7 +484,7 @@ elif menu == "📁 Analisis Dataset":
         )
 
         st.subheader(
-            "Preview Dataset"
+            "📋 Preview Dataset"
         )
 
         st.dataframe(
@@ -494,197 +494,203 @@ elif menu == "📁 Analisis Dataset":
 
         text_column = st.selectbox(
             "Pilih Kolom Ulasan",
-            df.columns
+            options=df.columns.tolist()
         )
 
-        # ==================================
-        # CONTOH NLP PIPELINE
-        # ==================================
+        if st.button(
+            "🚀 Analisis Dataset",
+            type="primary"
+        ):
 
-        st.subheader(
-            "🔍 Contoh Tahapan NLP"
-        )
+            # =====================================
+            # CONTOH NLP PIPELINE
+            # =====================================
 
-        sample_text = str(
-            df[text_column].iloc[0]
-        )
-
-        cleaned = clean_text(
-            sample_text
-        )
-
-        tokens = sentiment_tokenizer.tokenize(
-            cleaned
-        )
-
-        token_ids = (
-            sentiment_tokenizer
-            .convert_tokens_to_ids(
-                tokens
-            )
-        )
-
-        sent_pred, sent_probs = (
-            predict_sentiment(
-                cleaned
-            )
-        )
-
-        emo_pred, emo_probs = (
-            predict_emotion(
-                cleaned
-            )
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.write(
-                "Original Text"
+            st.subheader(
+                "🔍 Contoh Tahapan NLP (Data Pertama)"
             )
 
-            st.code(
+            sample_text = str(
+                df[text_column].iloc[0]
+            )
+
+            cleaned = clean_text(
                 sample_text
             )
 
-        with col2:
+            tokens = (
+                sentiment_tokenizer
+                .tokenize(cleaned)
+            )
+
+            token_ids = (
+                sentiment_tokenizer
+                .convert_tokens_to_ids(
+                    tokens
+                )
+            )
+
+            sent_pred, sent_probs = (
+                predict_sentiment(
+                    cleaned
+                )
+            )
+
+            emo_pred, emo_probs = (
+                predict_emotion(
+                    cleaned
+                )
+            )
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.write(
+                    "Original Text"
+                )
+
+                st.code(
+                    sample_text
+                )
+
+            with col2:
+
+                st.write(
+                    "Cleaned Text"
+                )
+
+                st.code(
+                    cleaned
+                )
 
             st.write(
-                "Cleaned Text"
+                "Tokenization"
             )
 
-            st.code(
-                cleaned
+            st.write(
+                tokens
             )
 
-        st.write(
-            "Tokenization"
-        )
+            st.write(
+                "Token IDs"
+            )
 
-        st.write(tokens)
+            st.write(
+                token_ids
+            )
 
-        st.write(
-            "Token IDs"
-        )
+            st.success(
+                f"Sentiment : {sentiment_labels[sent_pred]}"
+            )
 
-        st.write(token_ids)
+            st.info(
+                f"Emotion : {emotion_labels[emo_pred]}"
+            )
 
-        st.success(
-            f"Sentiment : {sentiment_labels[sent_pred]}"
-        )
+            # =====================================
+            # CONFIDENCE SENTIMENT
+            # =====================================
 
-        st.info(
-            f"Emotion : {emotion_labels[emo_pred]}"
-        )
+            st.subheader(
+                "📊 Confidence Sentiment"
+            )
 
-        # ==================================
-        # CONFIDENCE SENTIMENT
-        # ==================================
+            sent_df = pd.DataFrame({
 
-        st.subheader(
-            "Confidence Sentiment"
-        )
+                "Label": [
+                    sentiment_labels[i]
+                    for i in range(
+                        len(sent_probs)
+                    )
+                ],
 
-        sent_df = pd.DataFrame({
+                "Probability (%)": [
+                    round(
+                        x * 100,
+                        2
+                    )
+                    for x in sent_probs
+                ]
+            })
 
-            "Label":[
-                sentiment_labels[i]
-                for i in range(
-                    len(sent_probs)
-                )
-            ],
+            st.dataframe(
+                sent_df,
+                use_container_width=True
+            )
 
-            "Probability (%)":[
-                round(
-                    x * 100,
-                    2
-                )
-                for x in sent_probs
-            ]
-        })
-
-        st.dataframe(
-            sent_df,
-            use_container_width=True
-        )
-
-        st.plotly_chart(
-
-            px.bar(
+            fig_sent_conf = px.bar(
                 sent_df,
                 x="Label",
                 y="Probability (%)",
                 text="Probability (%)"
-            ),
+            )
 
-            use_container_width=True
-        )
+            st.plotly_chart(
+                fig_sent_conf,
+                use_container_width=True
+            )
 
-        # ==================================
-        # CONFIDENCE EMOTION
-        # ==================================
+            # =====================================
+            # CONFIDENCE EMOTION
+            # =====================================
 
-        st.subheader(
-            "Confidence Emotion"
-        )
+            st.subheader(
+                "📊 Confidence Emotion"
+            )
 
-        emo_df = pd.DataFrame({
+            emo_df = pd.DataFrame({
 
-            "Label":[
-                emotion_labels[i]
-                for i in range(
-                    len(emo_probs)
-                )
-            ],
+                "Label": [
+                    emotion_labels[i]
+                    for i in range(
+                        len(emo_probs)
+                    )
+                ],
 
-            "Probability (%)":[
-                round(
-                    x * 100,
-                    2
-                )
-                for x in emo_probs
-            ]
-        })
+                "Probability (%)": [
+                    round(
+                        x * 100,
+                        2
+                    )
+                    for x in emo_probs
+                ]
+            })
 
-        st.dataframe(
-            emo_df,
-            use_container_width=True
-        )
+            st.dataframe(
+                emo_df,
+                use_container_width=True
+            )
 
-        st.plotly_chart(
-
-            px.bar(
+            fig_emo_conf = px.bar(
                 emo_df,
                 x="Label",
                 y="Probability (%)",
                 text="Probability (%)"
-            ),
-
-            use_container_width=True
-        )
-
-        # ==================================
-        # ANALISIS DATASET
-        # ==================================
-
-        if st.button(
-            "🚀 Analisis Dataset"
-        ):
-
-            progress_bar = st.progress(
-                0
             )
+
+            st.plotly_chart(
+                fig_emo_conf,
+                use_container_width=True
+            )
+
+            # =====================================
+            # ANALISIS DATASET
+            # =====================================
+
+            st.subheader(
+                "⚙️ Proses Analisis Dataset"
+            )
+
+            progress_bar = st.progress(0)
 
             results = []
 
             total_rows = len(df)
 
             for i, text in enumerate(
-
                 df[text_column]
                 .astype(str)
-
             ):
 
                 result = predict_dataset(
@@ -713,48 +719,44 @@ elif menu == "📁 Analisis Dataset":
             )
 
             st.success(
-                "Analisis selesai"
+                "✅ Analisis Dataset Selesai"
             )
 
-            # ==========================
+            # =====================================
             # METRIK
-            # ==========================
+            # =====================================
 
-            c1, c2, c3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
 
-            c1.metric(
+            col1.metric(
                 "Total Ulasan",
                 len(df_result)
             )
 
-            c2.metric(
+            col2.metric(
                 "Sentimen Dominan",
                 df_result[
                     "sentiment"
                 ].mode()[0]
             )
 
-            c3.metric(
+            col3.metric(
                 "Emosi Dominan",
                 df_result[
                     "emotion"
                 ].mode()[0]
             )
 
-            # ==========================
-            # PIE SENTIMENT
-            # ==========================
+            # =====================================
+            # DISTRIBUSI SENTIMEN
+            # =====================================
 
             sentiment_count = (
-
                 df_result[
                     "sentiment"
                 ]
-
                 .value_counts()
-
                 .reset_index()
-
             )
 
             sentiment_count.columns = [
@@ -762,32 +764,29 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
+            fig_sent = px.pie(
+                sentiment_count,
+                names="Sentiment",
+                values="Total",
+                hole=0.4,
+                title="Distribusi Sentimen"
+            )
+
             st.plotly_chart(
-
-                px.pie(
-                    sentiment_count,
-                    names="Sentiment",
-                    values="Total",
-                    hole=0.4
-                ),
-
+                fig_sent,
                 use_container_width=True
             )
 
-            # ==========================
-            # BAR EMOTION
-            # ==========================
+            # =====================================
+            # DISTRIBUSI EMOSI
+            # =====================================
 
             emotion_count = (
-
                 df_result[
                     "emotion"
                 ]
-
                 .value_counts()
-
                 .reset_index()
-
             )
 
             emotion_count.columns = [
@@ -795,68 +794,62 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
+            fig_emo = px.bar(
+                emotion_count,
+                x="Emotion",
+                y="Total",
+                text_auto=True,
+                title="Distribusi Emosi"
+            )
+
             st.plotly_chart(
-
-                px.bar(
-                    emotion_count,
-                    x="Emotion",
-                    y="Total",
-                    text_auto=True
-                ),
-
+                fig_emo,
                 use_container_width=True
             )
 
-            # ==========================
+            # =====================================
             # TOP WORDS
-            # ==========================
+            # =====================================
 
             all_text = " ".join(
-
                 df_result[
                     text_column
                 ]
-
                 .astype(str)
-
                 .tolist()
-
             )
 
             top_words = Counter(
-
                 all_text.split()
-
             ).most_common(10)
 
             word_df = pd.DataFrame(
-
                 top_words,
-
                 columns=[
                     "Word",
                     "Frequency"
                 ]
             )
 
+            fig_word = px.bar(
+                word_df,
+                x="Word",
+                y="Frequency",
+                text_auto=True,
+                title="Top 10 Words"
+            )
+
             st.plotly_chart(
-
-                px.bar(
-                    word_df,
-                    x="Word",
-                    y="Frequency",
-                    text_auto=True
-                ),
-
+                fig_word,
                 use_container_width=True
             )
 
-            # ==========================
+            # =====================================
             # RATA-RATA CONFIDENCE
-            # ==========================
+            # =====================================
 
             st.subheader(
-                "Rata-rata Confidence"
+                "📈 Rata-rata Confidence Model"
             )
 
             confidence_cols = [
@@ -866,33 +859,21 @@ elif menu == "📁 Analisis Dataset":
                 for col
                 in df_result.columns
 
-                if col.startswith(
-                    "sent_"
-                )
-
-                or col.startswith(
-                    "emo_"
-                )
-
+                if col.startswith("sent_")
+                or col.startswith("emo_")
             ]
 
             confidence_df = (
-
                 df_result[
                     confidence_cols
                 ]
-
                 .mean()
-
                 .reset_index()
-
             )
 
             confidence_df.columns = [
-
                 "Label",
                 "Average Confidence (%)"
-
             ]
 
             st.dataframe(
@@ -900,40 +881,32 @@ elif menu == "📁 Analisis Dataset":
                 use_container_width=True
             )
 
-            # ==========================
-            # HASIL
-            # ==========================
+            # =====================================
+            # HASIL ANALISIS
+            # =====================================
 
             st.subheader(
-                "Hasil Analisis"
+                "📊 Hasil Analisis Dataset"
             )
 
             st.dataframe(
-                df_result,
+                df_result.head(100),
                 use_container_width=True
             )
 
+            # =====================================
+            # DOWNLOAD CSV
+            # =====================================
+
             csv = (
-
                 df_result
-
-                .to_csv(
-                    index=False
-                )
-
-                .encode(
-                    "utf-8-sig"
-                )
-
+                .to_csv(index=False)
+                .encode("utf-8-sig")
             )
 
             st.download_button(
-
-                "⬇ Download Hasil",
-
-                csv,
-
-                "hasil_analisis.csv",
-
-                "text/csv"
+                label="⬇ Download CSV",
+                data=csv,
+                file_name="hasil_analisis.csv",
+                mime="text/csv"
             )
