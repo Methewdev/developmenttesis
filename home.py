@@ -435,35 +435,25 @@ elif menu == "📁 Analisis Dataset":
 
     uploaded_file = st.file_uploader(
         "Upload CSV atau Excel",
-        type=["csv", "xlsx"]
+        type=["csv", "xlsx"],
+        key="dataset_upload"
     )
 
-    if uploaded_file:
+    if uploaded_file is not None:
 
         try:
+            df = load_dataset(uploaded_file)
 
-            df = load_dataset(
-                uploaded_file
-            )
+            if df.empty:
+                st.warning("Dataset kosong")
+                st.stop()
 
         except Exception as e:
-
-            st.error(
-                f"Error membaca file : {e}"
-            )
-
-            st.stop()
-
-        if df.empty:
-
-            st.warning(
-                "Dataset kosong."
-            )
-
+            st.error(f"Gagal membaca file: {str(e)}")
             st.stop()
 
         st.success(
-            f"Dataset berhasil dimuat ({len(df)} baris)"
+            f"Dataset berhasil dimuat ({len(df):,} baris)"
         )
 
         st.dataframe(
@@ -473,107 +463,91 @@ elif menu == "📁 Analisis Dataset":
 
         text_column = st.selectbox(
             "Pilih Kolom Ulasan",
-            df.columns
+            options=df.columns.tolist()
         )
 
-        if st.button(
-            "🚀 Analisis Dataset"
-        ):
+        if st.button("🚀 Analisis Dataset"):
 
-            with st.spinner(
-                "Sedang memproses analisis..."
-            ):
+            with st.spinner("Sedang memproses..."):
 
-                result_df = df[
-                    text_column
-                ].astype(str).apply(
-                    predict_dataset
+                result_df = (
+                    df[text_column]
+                    .astype(str)
+                    .apply(predict_dataset)
                 )
 
-                df = pd.concat(
-                    [
-                        df,
-                        result_df
-                    ],
+                df_result = pd.concat(
+                    [df, result_df],
                     axis=1
                 )
 
-            st.success(
-                "Analisis selesai"
-            )
+            st.success("Analisis selesai")
 
-            # Statistik
             col1, col2, col3 = st.columns(3)
 
             col1.metric(
                 "Total Ulasan",
-                len(df)
+                len(df_result)
             )
 
             col2.metric(
                 "Sentimen Dominan",
-                df["sentiment"].mode()[0]
+                df_result["sentiment"].mode()[0]
             )
 
             col3.metric(
                 "Emosi Dominan",
-                df["emotion"].mode()[0]
+                df_result["emotion"].mode()[0]
             )
 
-            # Pie Sentimen
-            sent_count = (
-                df["sentiment"]
+            sentiment_count = (
+                df_result["sentiment"]
                 .value_counts()
                 .reset_index()
             )
 
-            sent_count.columns = [
+            sentiment_count.columns = [
                 "Sentiment",
                 "Total"
             ]
 
-            fig_sent = px.pie(
-                sent_count,
-                names="Sentiment",
-                values="Total",
-                hole=0.4,
-                title="Distribusi Sentimen"
-            )
-
             st.plotly_chart(
-                fig_sent,
+                px.pie(
+                    sentiment_count,
+                    names="Sentiment",
+                    values="Total",
+                    hole=0.4,
+                    title="Distribusi Sentimen"
+                ),
                 use_container_width=True
             )
 
-            # Bar Emosi
-            emo_count = (
-                df["emotion"]
+            emotion_count = (
+                df_result["emotion"]
                 .value_counts()
                 .reset_index()
             )
 
-            emo_count.columns = [
+            emotion_count.columns = [
                 "Emotion",
                 "Total"
             ]
 
-            fig_emo = px.bar(
-                emo_count,
-                x="Emotion",
-                y="Total",
-                text_auto=True,
-                title="Distribusi Emosi"
-            )
-
             st.plotly_chart(
-                fig_emo,
+                px.bar(
+                    emotion_count,
+                    x="Emotion",
+                    y="Total",
+                    text_auto=True,
+                    title="Distribusi Emosi"
+                ),
                 use_container_width=True
             )
 
-            # Top Words
             all_text = " ".join(
-                df[text_column]
+                df_result[text_column]
                 .astype(str)
+                .tolist()
             )
 
             top_words = Counter(
@@ -582,38 +556,31 @@ elif menu == "📁 Analisis Dataset":
 
             word_df = pd.DataFrame(
                 top_words,
-                columns=[
-                    "Word",
-                    "Frequency"
-                ]
-            )
-
-            fig_word = px.bar(
-                word_df,
-                x="Word",
-                y="Frequency",
-                text_auto=True,
-                title="Top 10 Words"
+                columns=["Word", "Frequency"]
             )
 
             st.plotly_chart(
-                fig_word,
+                px.bar(
+                    word_df,
+                    x="Word",
+                    y="Frequency",
+                    text_auto=True,
+                    title="Top 10 Words"
+                ),
                 use_container_width=True
             )
 
-            st.subheader(
-                "Hasil Analisis"
-            )
+            st.subheader("Hasil Analisis")
 
             st.dataframe(
-                df,
+                df_result,
                 use_container_width=True
             )
 
-            csv = df.to_csv(
-                index=False
-            ).encode(
-                "utf-8-sig"
+            csv = (
+                df_result
+                .to_csv(index=False)
+                .encode("utf-8-sig")
             )
 
             st.download_button(
@@ -622,10 +589,3 @@ elif menu == "📁 Analisis Dataset":
                 file_name="hasil_analisis.csv",
                 mime="text/csv"
             )
-            st.download_button(
-                "⬇ Download Hasil",
-                csv,
-                "hasil_analisis.csv",
-                "text/csv"
-            )
-
