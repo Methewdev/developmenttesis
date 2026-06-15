@@ -183,6 +183,79 @@ def predict_dataset(text):
         "emotion": emotion_labels[emo_pred]
     })
 
+
+# =====================================================
+# LOAD DATASET
+# =====================================================
+def load_dataset(uploaded_file):
+
+    filename = uploaded_file.name.lower()
+
+    try:
+
+        # Excel
+        if filename.endswith(".xlsx"):
+
+            return pd.read_excel(
+                uploaded_file,
+                engine="openpyxl"
+            )
+
+        # CSV Separator Detection
+        separators = [
+            ",",
+            ";",
+            "\t",
+            "|"
+        ]
+
+        for sep in separators:
+
+            try:
+
+                uploaded_file.seek(0)
+
+                df = pd.read_csv(
+                    uploaded_file,
+                    sep=sep,
+                    encoding="utf-8"
+                )
+
+                if len(df.columns) > 1:
+                    return df
+
+            except:
+                pass
+
+        # UTF8 Auto Detect
+        try:
+
+            uploaded_file.seek(0)
+
+            return pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="utf-8"
+            )
+
+        except:
+
+            uploaded_file.seek(0)
+
+            return pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="latin1"
+            )
+
+    except Exception as e:
+
+        raise Exception(
+            f"Gagal membaca file: {str(e)}"
+        )
+
 # =====================================================
 # SIDEBAR
 # =====================================================
@@ -514,76 +587,5 @@ elif menu == "📁 Analisis Dataset":
                 file_name="hasil_analisis.csv",
                 mime="text/csv"
             )
-# =====================================================
-# LOAD DATASET
-# =====================================================
-def load_dataset(uploaded_file):
-
-    filename = uploaded_file.name.lower()
-
-    try:
-
-        # Excel
-        if filename.endswith(".xlsx"):
-
-            return pd.read_excel(
-                uploaded_file,
-                engine="openpyxl"
-            )
-
-        # CSV Separator Detection
-        separators = [
-            ",",
-            ";",
-            "\t",
-            "|"
-        ]
-
-        for sep in separators:
-
-            try:
-
-                uploaded_file.seek(0)
-
-                df = pd.read_csv(
-                    uploaded_file,
-                    sep=sep,
-                    encoding="utf-8"
-                )
-
-                if len(df.columns) > 1:
-                    return df
-
-            except:
-                pass
-
-        # UTF8 Auto Detect
-        try:
-
-            uploaded_file.seek(0)
-
-            return pd.read_csv(
-                uploaded_file,
-                sep=None,
-                engine="python",
-                encoding="utf-8"
-            )
-
-        except:
-
-            uploaded_file.seek(0)
-
-            return pd.read_csv(
-                uploaded_file,
-                sep=None,
-                engine="python",
-                encoding="latin1"
-            )
-
-    except Exception as e:
-
-        raise Exception(
-            f"Gagal membaca file: {str(e)}"
-        )
 
 
