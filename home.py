@@ -175,14 +175,33 @@ def predict_dataset(text):
 
     text = clean_text(text)
 
-    sent_pred, _ = predict_sentiment(text)
-    emo_pred, _ = predict_emotion(text)
+    sent_pred, sent_probs = predict_sentiment(text)
+    emo_pred, emo_probs = predict_emotion(text)
 
-    return pd.Series({
+    result = {
         "sentiment": sentiment_labels[sent_pred],
         "emotion": emotion_labels[emo_pred]
-    })
+    }
 
+    for i, prob in enumerate(sent_probs):
+
+        result[
+            f"sent_{sentiment_labels[i]}"
+        ] = round(
+            prob * 100,
+            2
+        )
+
+    for i, prob in enumerate(emo_probs):
+
+        result[
+            f"emo_{emotion_labels[i]}"
+        ] = round(
+            prob * 100,
+            2
+        )
+
+    return pd.Series(result)
 
 # =====================================================
 # LOAD DATASET
@@ -433,30 +452,40 @@ elif menu == "📁 Analisis Dataset":
 
     uploaded_file = st.file_uploader(
         "Upload CSV atau Excel",
-        type=["csv", "xlsx"],
-        key="dataset_upload"
+        type=["csv", "xlsx"]
     )
 
     if uploaded_file is not None:
 
         try:
 
-            df = load_dataset(uploaded_file)
-
-            if df.empty:
-                st.warning("Dataset kosong")
-                st.stop()
+            df = load_dataset(
+                uploaded_file
+            )
 
         except Exception as e:
 
-            st.error(f"Gagal membaca file: {str(e)}")
+            st.error(
+                f"Gagal membaca file: {e}"
+            )
+
+            st.stop()
+
+        if df.empty:
+
+            st.warning(
+                "Dataset kosong"
+            )
+
             st.stop()
 
         st.success(
             f"Dataset berhasil dimuat ({len(df):,} baris)"
         )
 
-        st.subheader("Preview Dataset")
+        st.subheader(
+            "Preview Dataset"
+        )
 
         st.dataframe(
             df.head(),
@@ -465,58 +494,79 @@ elif menu == "📁 Analisis Dataset":
 
         text_column = st.selectbox(
             "Pilih Kolom Ulasan",
-            options=df.columns.tolist()
+            df.columns
         )
 
-        # =================================================
-        # CONTOH PROSES NLP
-        # =================================================
+        # ==================================
+        # CONTOH NLP PIPELINE
+        # ==================================
 
-        st.subheader("🔍 Contoh Tahapan NLP")
+        st.subheader(
+            "🔍 Contoh Tahapan NLP"
+        )
 
         sample_text = str(
             df[text_column].iloc[0]
         )
 
-        cleaned_text = clean_text(
+        cleaned = clean_text(
             sample_text
         )
 
         tokens = sentiment_tokenizer.tokenize(
-            cleaned_text
+            cleaned
         )
 
-        token_ids = sentiment_tokenizer.convert_tokens_to_ids(
-            tokens
+        token_ids = (
+            sentiment_tokenizer
+            .convert_tokens_to_ids(
+                tokens
+            )
         )
 
-        sent_pred, sent_probs = predict_sentiment(
-            cleaned_text
+        sent_pred, sent_probs = (
+            predict_sentiment(
+                cleaned
+            )
         )
 
-        emo_pred, emo_probs = predict_emotion(
-            cleaned_text
+        emo_pred, emo_probs = (
+            predict_emotion(
+                cleaned
+            )
         )
 
         col1, col2 = st.columns(2)
 
         with col1:
 
-            st.write("Original Text")
+            st.write(
+                "Original Text"
+            )
 
-            st.code(sample_text)
+            st.code(
+                sample_text
+            )
 
         with col2:
 
-            st.write("Cleaned Text")
+            st.write(
+                "Cleaned Text"
+            )
 
-            st.code(cleaned_text)
+            st.code(
+                cleaned
+            )
 
-        st.write("Tokenization")
+        st.write(
+            "Tokenization"
+        )
 
         st.write(tokens)
 
-        st.write("Token IDs")
+        st.write(
+            "Token IDs"
+        )
 
         st.write(token_ids)
 
@@ -528,28 +578,126 @@ elif menu == "📁 Analisis Dataset":
             f"Emotion : {emotion_labels[emo_pred]}"
         )
 
-        # =================================================
+        # ==================================
+        # CONFIDENCE SENTIMENT
+        # ==================================
+
+        st.subheader(
+            "Confidence Sentiment"
+        )
+
+        sent_df = pd.DataFrame({
+
+            "Label":[
+                sentiment_labels[i]
+                for i in range(
+                    len(sent_probs)
+                )
+            ],
+
+            "Probability (%)":[
+                round(
+                    x * 100,
+                    2
+                )
+                for x in sent_probs
+            ]
+        })
+
+        st.dataframe(
+            sent_df,
+            use_container_width=True
+        )
+
+        st.plotly_chart(
+
+            px.bar(
+                sent_df,
+                x="Label",
+                y="Probability (%)",
+                text="Probability (%)"
+            ),
+
+            use_container_width=True
+        )
+
+        # ==================================
+        # CONFIDENCE EMOTION
+        # ==================================
+
+        st.subheader(
+            "Confidence Emotion"
+        )
+
+        emo_df = pd.DataFrame({
+
+            "Label":[
+                emotion_labels[i]
+                for i in range(
+                    len(emo_probs)
+                )
+            ],
+
+            "Probability (%)":[
+                round(
+                    x * 100,
+                    2
+                )
+                for x in emo_probs
+            ]
+        })
+
+        st.dataframe(
+            emo_df,
+            use_container_width=True
+        )
+
+        st.plotly_chart(
+
+            px.bar(
+                emo_df,
+                x="Label",
+                y="Probability (%)",
+                text="Probability (%)"
+            ),
+
+            use_container_width=True
+        )
+
+        # ==================================
         # ANALISIS DATASET
-        # =================================================
+        # ==================================
 
-        if st.button("🚀 Analisis Dataset"):
+        if st.button(
+            "🚀 Analisis Dataset"
+        ):
 
-            progress_bar = st.progress(0)
+            progress_bar = st.progress(
+                0
+            )
 
             results = []
 
             total_rows = len(df)
 
             for i, text in enumerate(
-                df[text_column].astype(str)
+
+                df[text_column]
+                .astype(str)
+
             ):
 
-                result = predict_dataset(text)
+                result = predict_dataset(
+                    text
+                )
 
-                results.append(result)
+                results.append(
+                    result
+                )
 
                 progress_bar.progress(
-                    (i + 1) / total_rows
+                    (i + 1)
+                    / total_rows
                 )
 
             result_df = pd.DataFrame(
@@ -557,7 +705,10 @@ elif menu == "📁 Analisis Dataset":
             )
 
             df_result = pd.concat(
-                [df, result_df],
+                [
+                    df,
+                    result_df
+                ],
                 axis=1
             )
 
@@ -565,35 +716,45 @@ elif menu == "📁 Analisis Dataset":
                 "Analisis selesai"
             )
 
-            # =================================================
-            # STATISTIK
-            # =================================================
+            # ==========================
+            # METRIK
+            # ==========================
 
-            col1, col2, col3 = st.columns(3)
+            c1, c2, c3 = st.columns(3)
 
-            col1.metric(
+            c1.metric(
                 "Total Ulasan",
                 len(df_result)
             )
 
-            col2.metric(
+            c2.metric(
                 "Sentimen Dominan",
-                df_result["sentiment"].mode()[0]
+                df_result[
+                    "sentiment"
+                ].mode()[0]
             )
 
-            col3.metric(
+            c3.metric(
                 "Emosi Dominan",
-                df_result["emotion"].mode()[0]
+                df_result[
+                    "emotion"
+                ].mode()[0]
             )
 
-            # =================================================
-            # DISTRIBUSI SENTIMEN
-            # =================================================
+            # ==========================
+            # PIE SENTIMENT
+            # ==========================
 
             sentiment_count = (
-                df_result["sentiment"]
+
+                df_result[
+                    "sentiment"
+                ]
+
                 .value_counts()
+
                 .reset_index()
+
             )
 
             sentiment_count.columns = [
@@ -601,27 +762,32 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
-            fig_sent = px.pie(
-                sentiment_count,
-                names="Sentiment",
-                values="Total",
-                hole=0.4,
-                title="Distribusi Sentimen"
-            )
-
             st.plotly_chart(
-                fig_sent,
+
+                px.pie(
+                    sentiment_count,
+                    names="Sentiment",
+                    values="Total",
+                    hole=0.4
+                ),
+
                 use_container_width=True
             )
 
-            # =================================================
-            # DISTRIBUSI EMOSI
-            # =================================================
+            # ==========================
+            # BAR EMOTION
+            # ==========================
 
             emotion_count = (
-                df_result["emotion"]
+
+                df_result[
+                    "emotion"
+                ]
+
                 .value_counts()
+
                 .reset_index()
+
             )
 
             emotion_count.columns = [
@@ -629,25 +795,117 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
-            fig_emo = px.bar(
-                emotion_count,
-                x="Emotion",
-                y="Total",
-                text_auto=True,
-                title="Distribusi Emosi"
-            )
-
             st.plotly_chart(
-                fig_emo,
+
+                px.bar(
+                    emotion_count,
+                    x="Emotion",
+                    y="Total",
+                    text_auto=True
+                ),
+
                 use_container_width=True
             )
 
-            # =================================================
-            # HASIL
-            # =================================================
+            # ==========================
+            # TOP WORDS
+            # ==========================
+
+            all_text = " ".join(
+
+                df_result[
+                    text_column
+                ]
+
+                .astype(str)
+
+                .tolist()
+
+            )
+
+            top_words = Counter(
+
+                all_text.split()
+
+            ).most_common(10)
+
+            word_df = pd.DataFrame(
+
+                top_words,
+
+                columns=[
+                    "Word",
+                    "Frequency"
+                ]
+            )
+
+            st.plotly_chart(
+
+                px.bar(
+                    word_df,
+                    x="Word",
+                    y="Frequency",
+                    text_auto=True
+                ),
+
+                use_container_width=True
+            )
+
+            # ==========================
+            # RATA-RATA CONFIDENCE
+            # ==========================
 
             st.subheader(
-                "📊 Hasil Analisis"
+                "Rata-rata Confidence"
+            )
+
+            confidence_cols = [
+
+                col
+
+                for col
+                in df_result.columns
+
+                if col.startswith(
+                    "sent_"
+                )
+
+                or col.startswith(
+                    "emo_"
+                )
+
+            ]
+
+            confidence_df = (
+
+                df_result[
+                    confidence_cols
+                ]
+
+                .mean()
+
+                .reset_index()
+
+            )
+
+            confidence_df.columns = [
+
+                "Label",
+                "Average Confidence (%)"
+
+            ]
+
+            st.dataframe(
+                confidence_df,
+                use_container_width=True
+            )
+
+            # ==========================
+            # HASIL
+            # ==========================
+
+            st.subheader(
+                "Hasil Analisis"
             )
 
             st.dataframe(
@@ -656,16 +914,26 @@ elif menu == "📁 Analisis Dataset":
             )
 
             csv = (
+
                 df_result
-                .to_csv(index=False)
-                .encode("utf-8-sig")
+
+                .to_csv(
+                    index=False
+                )
+
+                .encode(
+                    "utf-8-sig"
+                )
+
             )
 
             st.download_button(
-                label="⬇ Download Hasil Analisis",
-                data=csv,
-                file_name="hasil_analisis.csv",
-                mime="text/csv"
+
+                "⬇ Download Hasil",
+
+                csv,
+
+                "hasil_analisis.csv",
+
+                "text/csv"
             )
-
-
