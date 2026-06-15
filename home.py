@@ -350,6 +350,81 @@ elif menu == "✍️ Analisis Ulasan":
             use_container_width=True
         )
 
+
+# =====================================================
+# LOAD DATASET
+# =====================================================
+def load_dataset(uploaded_file):
+
+    filename = uploaded_file.name.lower()
+
+    try:
+
+        # Excel
+        if filename.endswith(".xlsx"):
+
+            return pd.read_excel(
+                uploaded_file,
+                engine="openpyxl"
+            )
+
+        # CSV Separator Detection
+        separators = [
+            ",",
+            ";",
+            "\t",
+            "|"
+        ]
+
+        for sep in separators:
+
+            try:
+
+                uploaded_file.seek(0)
+
+                df = pd.read_csv(
+                    uploaded_file,
+                    sep=sep,
+                    encoding="utf-8"
+                )
+
+                if len(df.columns) > 1:
+                    return df
+
+            except:
+                pass
+
+        # UTF8 Auto Detect
+        try:
+
+            uploaded_file.seek(0)
+
+            return pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="utf-8"
+            )
+
+        except:
+
+            uploaded_file.seek(0)
+
+            return pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="latin1"
+            )
+
+    except Exception as e:
+
+        raise Exception(
+            f"Gagal membaca file: {str(e)}"
+        )
+
+
+
 # =====================================================
 # DATASET ANALYSIS
 # =====================================================
@@ -359,14 +434,36 @@ elif menu == "📁 Analisis Dataset":
     st.title("📁 Analisis Dataset")
 
     uploaded_file = st.file_uploader(
-        "Upload CSV",
-        type=["csv"]
+        "Upload CSV atau Excel",
+        type=["csv", "xlsx"]
     )
 
     if uploaded_file:
 
-        df = pd.read_csv(
-            uploaded_file
+        try:
+
+            df = load_dataset(
+                uploaded_file
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Error membaca file : {e}"
+            )
+
+            st.stop()
+
+        if df.empty:
+
+            st.warning(
+                "Dataset kosong."
+            )
+
+            st.stop()
+
+        st.success(
+            f"Dataset berhasil dimuat ({len(df)} baris)"
         )
 
         st.dataframe(
@@ -384,17 +481,20 @@ elif menu == "📁 Analisis Dataset":
         ):
 
             with st.spinner(
-                "Sedang memproses..."
+                "Sedang memproses analisis..."
             ):
 
                 result_df = df[
                     text_column
-                ].apply(
+                ].astype(str).apply(
                     predict_dataset
                 )
 
                 df = pd.concat(
-                    [df, result_df],
+                    [
+                        df,
+                        result_df
+                    ],
                     axis=1
                 )
 
@@ -402,6 +502,7 @@ elif menu == "📁 Analisis Dataset":
                 "Analisis selesai"
             )
 
+            # Statistik
             col1, col2, col3 = st.columns(3)
 
             col1.metric(
@@ -419,6 +520,7 @@ elif menu == "📁 Analisis Dataset":
                 df["emotion"].mode()[0]
             )
 
+            # Pie Sentimen
             sent_count = (
                 df["sentiment"]
                 .value_counts()
@@ -434,7 +536,8 @@ elif menu == "📁 Analisis Dataset":
                 sent_count,
                 names="Sentiment",
                 values="Total",
-                hole=0.4
+                hole=0.4,
+                title="Distribusi Sentimen"
             )
 
             st.plotly_chart(
@@ -442,6 +545,7 @@ elif menu == "📁 Analisis Dataset":
                 use_container_width=True
             )
 
+            # Bar Emosi
             emo_count = (
                 df["emotion"]
                 .value_counts()
@@ -457,7 +561,8 @@ elif menu == "📁 Analisis Dataset":
                 emo_count,
                 x="Emotion",
                 y="Total",
-                text_auto=True
+                text_auto=True,
+                title="Distribusi Emosi"
             )
 
             st.plotly_chart(
@@ -465,6 +570,7 @@ elif menu == "📁 Analisis Dataset":
                 use_container_width=True
             )
 
+            # Top Words
             all_text = " ".join(
                 df[text_column]
                 .astype(str)
@@ -486,12 +592,17 @@ elif menu == "📁 Analisis Dataset":
                 word_df,
                 x="Word",
                 y="Frequency",
+                text_auto=True,
                 title="Top 10 Words"
             )
 
             st.plotly_chart(
                 fig_word,
                 use_container_width=True
+            )
+
+            st.subheader(
+                "Hasil Analisis"
             )
 
             st.dataframe(
@@ -501,8 +612,16 @@ elif menu == "📁 Analisis Dataset":
 
             csv = df.to_csv(
                 index=False
-            ).encode("utf-8")
+            ).encode(
+                "utf-8-sig"
+            )
 
+            st.download_button(
+                label="⬇ Download Hasil Analisis",
+                data=csv,
+                file_name="hasil_analisis.csv",
+                mime="text/csv"
+            )
             st.download_button(
                 "⬇ Download Hasil",
                 csv,
