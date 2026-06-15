@@ -440,6 +440,7 @@ elif menu == "📁 Analisis Dataset":
     if uploaded_file is not None:
 
         try:
+
             df = load_dataset(uploaded_file)
 
             if df.empty:
@@ -447,12 +448,15 @@ elif menu == "📁 Analisis Dataset":
                 st.stop()
 
         except Exception as e:
+
             st.error(f"Gagal membaca file: {str(e)}")
             st.stop()
 
         st.success(
             f"Dataset berhasil dimuat ({len(df):,} baris)"
         )
+
+        st.subheader("Preview Dataset")
 
         st.dataframe(
             df.head(),
@@ -464,22 +468,106 @@ elif menu == "📁 Analisis Dataset":
             options=df.columns.tolist()
         )
 
+        # =================================================
+        # CONTOH PROSES NLP
+        # =================================================
+
+        st.subheader("🔍 Contoh Tahapan NLP")
+
+        sample_text = str(
+            df[text_column].iloc[0]
+        )
+
+        cleaned_text = clean_text(
+            sample_text
+        )
+
+        tokens = sentiment_tokenizer.tokenize(
+            cleaned_text
+        )
+
+        token_ids = sentiment_tokenizer.convert_tokens_to_ids(
+            tokens
+        )
+
+        sent_pred, sent_probs = predict_sentiment(
+            cleaned_text
+        )
+
+        emo_pred, emo_probs = predict_emotion(
+            cleaned_text
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.write("Original Text")
+
+            st.code(sample_text)
+
+        with col2:
+
+            st.write("Cleaned Text")
+
+            st.code(cleaned_text)
+
+        st.write("Tokenization")
+
+        st.write(tokens)
+
+        st.write("Token IDs")
+
+        st.write(token_ids)
+
+        st.success(
+            f"Sentiment : {sentiment_labels[sent_pred]}"
+        )
+
+        st.info(
+            f"Emotion : {emotion_labels[emo_pred]}"
+        )
+
+        # =================================================
+        # ANALISIS DATASET
+        # =================================================
+
         if st.button("🚀 Analisis Dataset"):
 
-            with st.spinner("Sedang memproses..."):
+            progress_bar = st.progress(0)
 
-                result_df = (
-                    df[text_column]
-                    .astype(str)
-                    .apply(predict_dataset)
+            results = []
+
+            total_rows = len(df)
+
+            for i, text in enumerate(
+                df[text_column].astype(str)
+            ):
+
+                result = predict_dataset(text)
+
+                results.append(result)
+
+                progress_bar.progress(
+                    (i + 1) / total_rows
                 )
 
-                df_result = pd.concat(
-                    [df, result_df],
-                    axis=1
-                )
+            result_df = pd.DataFrame(
+                results
+            )
 
-            st.success("Analisis selesai")
+            df_result = pd.concat(
+                [df, result_df],
+                axis=1
+            )
+
+            st.success(
+                "Analisis selesai"
+            )
+
+            # =================================================
+            # STATISTIK
+            # =================================================
 
             col1, col2, col3 = st.columns(3)
 
@@ -498,6 +586,10 @@ elif menu == "📁 Analisis Dataset":
                 df_result["emotion"].mode()[0]
             )
 
+            # =================================================
+            # DISTRIBUSI SENTIMEN
+            # =================================================
+
             sentiment_count = (
                 df_result["sentiment"]
                 .value_counts()
@@ -509,16 +601,22 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
+            fig_sent = px.pie(
+                sentiment_count,
+                names="Sentiment",
+                values="Total",
+                hole=0.4,
+                title="Distribusi Sentimen"
+            )
+
             st.plotly_chart(
-                px.pie(
-                    sentiment_count,
-                    names="Sentiment",
-                    values="Total",
-                    hole=0.4,
-                    title="Distribusi Sentimen"
-                ),
+                fig_sent,
                 use_container_width=True
             )
+
+            # =================================================
+            # DISTRIBUSI EMOSI
+            # =================================================
 
             emotion_count = (
                 df_result["emotion"]
@@ -531,44 +629,26 @@ elif menu == "📁 Analisis Dataset":
                 "Total"
             ]
 
-            st.plotly_chart(
-                px.bar(
-                    emotion_count,
-                    x="Emotion",
-                    y="Total",
-                    text_auto=True,
-                    title="Distribusi Emosi"
-                ),
-                use_container_width=True
-            )
-
-            all_text = " ".join(
-                df_result[text_column]
-                .astype(str)
-                .tolist()
-            )
-
-            top_words = Counter(
-                all_text.split()
-            ).most_common(10)
-
-            word_df = pd.DataFrame(
-                top_words,
-                columns=["Word", "Frequency"]
+            fig_emo = px.bar(
+                emotion_count,
+                x="Emotion",
+                y="Total",
+                text_auto=True,
+                title="Distribusi Emosi"
             )
 
             st.plotly_chart(
-                px.bar(
-                    word_df,
-                    x="Word",
-                    y="Frequency",
-                    text_auto=True,
-                    title="Top 10 Words"
-                ),
+                fig_emo,
                 use_container_width=True
             )
 
-            st.subheader("Hasil Analisis")
+            # =================================================
+            # HASIL
+            # =================================================
+
+            st.subheader(
+                "📊 Hasil Analisis"
+            )
 
             st.dataframe(
                 df_result,
