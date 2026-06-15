@@ -1,5 +1,3 @@
-# app.py
-
 
 import streamlit as st
 import pandas as pd
@@ -168,68 +166,7 @@ def predict_emotion(text):
         ).item()
 
     return pred, probs.squeeze().tolist()
-# =====================================================
-# LOAD DATASET
-# =====================================================
 
-# =====================================================
-# LOAD DATASET
-# =====================================================
-
-def load_dataset(uploaded_file):
-
-    try:
-
-        # Excel
-        if uploaded_file.name.endswith(".xlsx"):
-
-            return pd.read_excel(
-                uploaded_file,
-                engine="openpyxl"
-            )
-
-        separators = [
-            ",",
-            ";",
-            "|",
-            "\t"
-        ]
-
-        for sep in separators:
-
-            try:
-
-                uploaded_file.seek(0)
-
-                df = pd.read_csv(
-                    uploaded_file,
-                    sep=sep,
-                    encoding="utf-8",
-                    on_bad_lines="skip"
-                )
-
-              if uploaded_file:
-
-    df = load_dataset(
-        uploaded_file
-    )
-
-    if df is None:
-        st.stop()
-
-    st.success(
-        f"Dataset berhasil dimuat : {len(df)} baris"
-    )
-
-    st.write(
-        "Kolom ditemukan:",
-        list(df.columns)
-    )
-
-    st.dataframe(
-        df.head(),
-        use_container_width=True
-    )
 # =====================================================
 # DATASET PREDICTION
 # =====================================================
@@ -411,7 +348,9 @@ elif menu == "✍️ Analisis Ulasan":
         st.plotly_chart(
             gauge,
             use_container_width=True
-        )# =====================================================
+        )
+
+# =====================================================
 # DATASET ANALYSIS
 # =====================================================
 
@@ -420,26 +359,14 @@ elif menu == "📁 Analisis Dataset":
     st.title("📁 Analisis Dataset")
 
     uploaded_file = st.file_uploader(
-        "Upload CSV / XLSX",
-        type=["csv", "xlsx"]
+        "Upload CSV",
+        type=["csv"]
     )
 
-    if uploaded_file is not None:
+    if uploaded_file:
 
-        df = load_dataset(
+        df = pd.read_csv(
             uploaded_file
-        )
-
-        if df is None:
-            st.stop()
-
-        st.success(
-            f"Dataset berhasil dimuat : {len(df)} baris"
-        )
-
-        st.write(
-            "Kolom ditemukan:",
-            list(df.columns)
         )
 
         st.dataframe(
@@ -475,8 +402,100 @@ elif menu == "📁 Analisis Dataset":
                 "Analisis selesai"
             )
 
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Total Ulasan",
+                len(df)
+            )
+
+            col2.metric(
+                "Sentimen Dominan",
+                df["sentiment"].mode()[0]
+            )
+
+            col3.metric(
+                "Emosi Dominan",
+                df["emotion"].mode()[0]
+            )
+
+            sent_count = (
+                df["sentiment"]
+                .value_counts()
+                .reset_index()
+            )
+
+            sent_count.columns = [
+                "Sentiment",
+                "Total"
+            ]
+
+            fig_sent = px.pie(
+                sent_count,
+                names="Sentiment",
+                values="Total",
+                hole=0.4
+            )
+
+            st.plotly_chart(
+                fig_sent,
+                use_container_width=True
+            )
+
+            emo_count = (
+                df["emotion"]
+                .value_counts()
+                .reset_index()
+            )
+
+            emo_count.columns = [
+                "Emotion",
+                "Total"
+            ]
+
+            fig_emo = px.bar(
+                emo_count,
+                x="Emotion",
+                y="Total",
+                text_auto=True
+            )
+
+            st.plotly_chart(
+                fig_emo,
+                use_container_width=True
+            )
+
+            all_text = " ".join(
+                df[text_column]
+                .astype(str)
+            )
+
+            top_words = Counter(
+                all_text.split()
+            ).most_common(10)
+
+            word_df = pd.DataFrame(
+                top_words,
+                columns=[
+                    "Word",
+                    "Frequency"
+                ]
+            )
+
+            fig_word = px.bar(
+                word_df,
+                x="Word",
+                y="Frequency",
+                title="Top 10 Words"
+            )
+
+            st.plotly_chart(
+                fig_word,
+                use_container_width=True
+            )
+
             st.dataframe(
-                df.head(),
+                df,
                 use_container_width=True
             )
 
@@ -489,82 +508,5 @@ elif menu == "📁 Analisis Dataset":
                 csv,
                 "hasil_analisis.csv",
                 "text/csv"
-# =====================================================
-# DATASET ANALYSIS
-# =====================================================
-
-elif menu == "📁 Analisis Dataset":
-
-    st.title("📁 Analisis Dataset")
-
-    uploaded_file = st.file_uploader(
-        "Upload CSV / XLSX",
-        type=["csv", "xlsx"]
-    )
-
-    if uploaded_file is not None:
-
-        df = load_dataset(
-            uploaded_file
-        )
-
-        if df is None:
-            st.stop()
-
-        st.success(
-            f"Dataset berhasil dimuat : {len(df)} baris"
-        )
-
-        st.write(
-            "Kolom ditemukan:",
-            list(df.columns)
-        )
-
-        st.dataframe(
-            df.head(),
-            use_container_width=True
-        )
-
-        text_column = st.selectbox(
-            "Pilih Kolom Ulasan",
-            df.columns
-        )
-
-        if st.button(
-            "🚀 Analisis Dataset"
-        ):
-
-            with st.spinner(
-                "Sedang memproses..."
-            ):
-
-                result_df = df[
-                    text_column
-                ].apply(
-                    predict_dataset
-                )
-
-                df = pd.concat(
-                    [df, result_df],
-                    axis=1
-                )
-
-            st.success(
-                "Analisis selesai"
             )
 
-            st.dataframe(
-                df.head(),
-                use_container_width=True
-            )
-
-            csv = df.to_csv(
-                index=False
-            ).encode("utf-8")
-
-            st.download_button(
-                "⬇ Download Hasil",
-                csv,
-                "hasil_analisis.csv",
-                "text/csv"
-            )
